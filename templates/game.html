@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Playing - Prism Wars</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/game.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="game-body">
+    <div class="game-container">
+        <!-- Header -->
+        <div class="game-header">
+            <div class="header-left">
+                <h1 class="game-title-small">◆ Prism Wars</h1>
+                <div class="round-counter">Round <span id="roundNumber">1</span>/<span id="maxRounds">20</span></div>
+            </div>
+            <div class="header-center">
+                <div class="current-turn" id="currentTurn">
+                    <div class="turn-indicator"></div>
+                    <span></span>
+                </div>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-small" onclick="window.location.href='/'">Leave Game</button>
+            </div>
+        </div>
+
+        <!-- Main Game Area -->
+        <div class="game-main">
+            <!-- Left Sidebar - Player Info & Scores -->
+            <div class="sidebar sidebar-left">
+                <div class="scores-panel">
+                    <h3>Scores</h3>
+                    <div id="scoresList"></div>
+                </div>
+                
+                <div class="players-panel">
+                    <h3>Players</h3>
+                    <div id="playersInfo"></div>
+                </div>
+            </div>
+
+            <!-- Center - Game Board -->
+            <div class="board-container">
+                <canvas id="gameCanvas"></canvas>
+                <div class="board-overlay" id="boardOverlay"></div>
+            </div>
+
+            <!-- Right Sidebar - Inventory & Actions -->
+            <div class="sidebar sidebar-right">
+                <div class="inventory-panel">
+                    <h3>Your Pieces</h3>
+                    <div id="inventory"></div>
+                    
+                    <div class="selected-piece-info" id="selectedPieceInfo">
+                        <h4>Selected: <span id="selectedPieceName">None</span></h4>
+                        <div class="piece-description" id="pieceDescription"></div>
+                        <div class="rotation-controls" id="rotationControls" style="display: none;">
+                            <button class="btn-rotate" onclick="rotatePiece(-90)">↶</button>
+                            <span id="rotationDisplay">0°</span>
+                            <button class="btn-rotate" onclick="rotatePiece(90)">↷</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="actions-panel">
+                    <button id="passTurnBtn" class="btn btn-secondary btn-full">Pass Turn</button>
+                </div>
+
+                <div class="legend-panel">
+                    <h4>Legend</h4>
+                    <div class="legend-item">
+                        <span class="legend-icon">🪞</span>
+                        <span>Mirror - Reflects light 90°</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-icon">◆</span>
+                        <span>Prism - Splits into 3 beams</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-icon">⬛</span>
+                        <span>Blocker - Stops light</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div class="modal" id="gameOverModal">
+        <div class="modal-content">
+            <h2>Game Over!</h2>
+            <div id="winnerInfo"></div>
+            <div id="finalScores"></div>
+            <button class="btn btn-primary" onclick="window.location.href='/'">Return to Menu</button>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/game.js') }}"></script>
+    <script>
+        const gameId = '{{ game_id }}';
+        const playerId = '{{ player_id }}';
+        initGame(gameId, playerId);
+    </script>
+</body>
+</html>

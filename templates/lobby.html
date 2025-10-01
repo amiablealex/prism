@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lobby - Prism Wars</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="lobby-container">
+            <h1 class="game-title">
+                <span class="prism-icon">◆</span>
+                Prism Wars Lobby
+                <span class="prism-icon">◆</span>
+            </h1>
+
+            <div class="game-code-display">
+                <label>Game Code:</label>
+                <div class="game-code">{{ game_id }}</div>
+                <button class="btn-copy" onclick="copyGameCode()">Copy</button>
+            </div>
+
+            <div class="lobby-status">
+                <h2>Players <span id="playerCount">0/0</span></h2>
+                <div class="players-list" id="playersList"></div>
+            </div>
+
+            <div class="lobby-actions">
+                <button id="readyBtn" class="btn btn-primary">Ready</button>
+                <button onclick="window.location.href='/'" class="btn btn-secondary">Leave</button>
+            </div>
+
+            <div class="waiting-message" id="waitingMessage">
+                Waiting for all players to ready up...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const gameId = '{{ game_id }}';
+        const playerId = '{{ player_id }}';
+        const socket = io();
+        
+        let isReady = false;
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('join_lobby', {
+                game_id: gameId,
+                player_id: playerId
+            });
+        });
+
+        socket.on('lobby_update', (data) => {
+            updateLobby(data);
+        });
+
+        socket.on('game_starting', (data) => {
+            window.location.href = `/game/${data.game_id}`;
+        });
+
+        socket.on('error', (data) => {
+            alert(data.message);
+        });
+
+        function updateLobby(data) {
+            const playersList = document.getElementById('playersList');
+            const playerCount = document.getElementById('playerCount');
+            const waitingMessage = document.getElementById('waitingMessage');
+
+            playerCount.textContent = `${data.players.length}/${data.max_players}`;
+
+            playersList.innerHTML = '';
+            data.players.forEach(player => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'player-card';
+                if (player.ready) {
+                    playerCard.classList.add('ready');
+                }
+                if (player.id === playerId) {
+                    playerCard.classList.add('you');
+                }
+
+                playerCard.innerHTML = `
+                    <div class="player-color" style="background-color: ${player.color}"></div>
+                    <div class="player-name">${player.username} ${player.id === playerId ? '(You)' : ''}</div>
+                    <div class="player-status">${player.ready ? '✓ Ready' : 'Not Ready'}</div>
+                `;
+
+                playersList.appendChild(playerCard);
+            });
+
+            // Check if we can start
+            const allReady = data.players.length >= 2 && data.players.every(p => p.ready);
+            if (allReady) {
+                waitingMessage.textContent = 'Starting game...';
+                waitingMessage.style.color = '#4ECDC4';
+            } else if (data.players.length < 2) {
+                waitingMessage.textContent = 'Waiting for more players to join...';
+                waitingMessage.style.color = '#FFD93D';
+            } else {
+                waitingMessage.textContent = 'Waiting for all players to ready up...';
+                waitingMessage.style.color = '#999';
+            }
+        }
+
+        document.getElementById('readyBtn').addEventListener('click', () => {
+            if (!isReady) {
+                socket.emit('player_ready', {
+                    game_id: gameId,
+                    player_id: playerId
+                });
+                isReady = true;
+                document.getElementById('readyBtn').textContent = 'Ready!';
+                document.getElementById('readyBtn').disabled = true;
+                document.getElementById('readyBtn').style.opacity = '0.6';
+            }
+        });
+
+        function copyGameCode() {
+            navigator.clipboard.writeText(gameId).then(() => {
+                const btn = document.querySelector('.btn-copy');
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.style.backgroundColor = '#4ECDC4';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.backgroundColor = '';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>

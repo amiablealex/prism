@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prism Wars - Strategic Light Battle</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="hero-section">
+            <h1 class="game-title">
+                <span class="prism-icon">◆</span>
+                Prism Wars
+                <span class="prism-icon">◆</span>
+            </h1>
+            <p class="tagline">Bend light, control territory, dominate the board</p>
+            
+            <div class="game-description">
+                <h2>How to Play</h2>
+                <div class="rules-grid">
+                    <div class="rule-card">
+                        <div class="rule-icon">🎯</div>
+                        <h3>Victory</h3>
+                        <p>Control the most territory after 20 rounds to win</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="menu-section">
+            <div class="menu-card">
+                <h2>Create New Game</h2>
+                <form id="createGameForm">
+                    <div class="form-group">
+                        <label for="createUsername">Your Name</label>
+                        <input type="text" id="createUsername" placeholder="Enter your name" required maxlength="20">
+                    </div>
+                    <div class="form-group">
+                        <label for="numPlayers">Number of Players</label>
+                        <select id="numPlayers">
+                            <option value="2">2 Players</option>
+                            <option value="3">3 Players</option>
+                            <option value="4">4 Players</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create Game</button>
+                </form>
+            </div>
+
+            <div class="divider">
+                <span>OR</span>
+            </div>
+
+            <div class="menu-card">
+                <h2>Join Existing Game</h2>
+                <form id="joinGameForm">
+                    <div class="form-group">
+                        <label for="joinUsername">Your Name</label>
+                        <input type="text" id="joinUsername" placeholder="Enter your name" required maxlength="20">
+                    </div>
+                    <div class="form-group">
+                        <label for="gameId">Game Code</label>
+                        <input type="text" id="gameId" placeholder="Enter 6-character code" required maxlength="6" style="text-transform: uppercase;">
+                    </div>
+                    <button type="submit" class="btn btn-secondary">Join Game</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+    </div>
+
+    <script>
+        const createForm = document.getElementById('createGameForm');
+        const joinForm = document.getElementById('joinGameForm');
+        const errorMessage = document.getElementById('errorMessage');
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        createForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('createUsername').value.trim();
+            const numPlayers = document.getElementById('numPlayers').value;
+
+            if (!username) {
+                showError('Please enter your name');
+                return;
+            }
+
+            try {
+                const response = await fetch('/create_game', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        num_players: numPlayers
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.location.href = `/lobby/${data.game_id}`;
+                } else {
+                    showError(data.error || 'Failed to create game');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        });
+
+        joinForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('joinUsername').value.trim();
+            const gameId = document.getElementById('gameId').value.trim().toUpperCase();
+
+            if (!username) {
+                showError('Please enter your name');
+                return;
+            }
+
+            if (!gameId || gameId.length !== 6) {
+                showError('Please enter a valid 6-character game code');
+                return;
+            }
+
+            try {
+                const response = await fetch('/join_game', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        game_id: gameId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.location.href = `/lobby/${data.game_id}`;
+                } else {
+                    showError(data.error || 'Failed to join game');
+                }
+            } catch (error) {
+                showError('Network error. Please try again.');
+            }
+        });
+
+        // Auto-uppercase game ID input
+        document.getElementById('gameId').addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
+    </script>
+</body>
+</html>rule-icon">🪞</div>
+                        <h3>Mirrors</h3>
+                        <p>Reflect light beams at 90° angles to navigate the board</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">◆</div>
+                        <h3>Prisms</h3>
+                        <p>Split light into three beams for massive area control</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">⬛</div>
+                        <h3>Blockers</h3>
+                        <p>Stop enemy light and protect your territories</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="
