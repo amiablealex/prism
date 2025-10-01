@@ -1,0 +1,563 @@
+{
+  "game_id": "NWZSY5",
+  "players": [
+    {
+      "id": "6e0387d304fa756f5065af91ab6e118d",
+      "username": "ab",
+      "color": "#FF6B6B",
+      "ready": true
+    },
+    {
+      "id": "148bec6396f65ef12a941e125dcdb942",
+      "username": "cd",
+      "color": "#4ECDC4",
+      "ready": true
+    }
+  ],
+  "state": "playing",
+  "board": [
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ],
+  "board_size": 12,
+  "light_sources": [
+    {
+      "x": 2,
+      "y": -1,
+      "direction": "down",
+      "player": 0,
+      "color": "#FF6B6B"
+    },
+    {
+      "x": 1,
+      "y": 12,
+      "direction": "up",
+      "player": 0,
+      "color": "#FF6B6B"
+    },
+    {
+      "x": -1,
+      "y": 2,
+      "direction": "right",
+      "player": 0,
+      "color": "#FF6B6B"
+    },
+    {
+      "x": 6,
+      "y": -1,
+      "direction": "down",
+      "player": 1,
+      "color": "#4ECDC4"
+    },
+    {
+      "x": 5,
+      "y": 12,
+      "direction": "up",
+      "player": 1,
+      "color": "#4ECDC4"
+    },
+    {
+      "x": -1,
+      "y": 6,
+      "direction": "right",
+      "player": 1,
+      "color": "#4ECDC4"
+    }
+  ],
+  "current_player": 0,
+  "round_number": 1,
+  "max_rounds": 20,
+  "winner": null,
+  "player_inventory": [
+    {
+      "mirror": 15,
+      "prism": 8,
+      "blocker": 10
+    },
+    {
+      "mirror": 15,
+      "prism": 8,
+      "blocker": 10
+    }
+  ],
+  "territory": [
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [
+        0
+      ]
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [
+        1
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        0,
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [
+        1
+      ]
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ],
+    [
+      [],
+      [
+        0
+      ],
+      [
+        0
+      ],
+      [],
+      [],
+      [
+        1
+      ],
+      [
+        1
+      ],
+      [],
+      [],
+      [],
+      [],
+      []
+    ]
+  ],
+  "scores": [
+    {
+      "player": "ab",
+      "color": "#FF6B6B",
+      "score": 30
+    },
+    {
+      "player": "cd",
+      "color": "#4ECDC4",
+      "score": 30
+    }
+  ]
+}
