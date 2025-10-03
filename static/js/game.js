@@ -7,6 +7,47 @@ let cellSize = 50;
 let boardOffsetX = 0;
 let boardOffsetY = 0;
 let myPlayerIndex = -1;
+let previewTerritory = null;
+let lightParticles = [];
+let animationFrame = null;
+let timeRemaining = 60;
+let timerInterval = null;
+
+// Light beam animation
+class LightParticle {
+    constructor(x1, y1, x2, y2, color) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.color = color;
+        this.progress = Math.random(); // Random start position
+        this.speed = 0.02 + Math.random() * 0.01;
+    }
+    
+    update() {
+        this.progress += this.speed;
+        if (this.progress > 1) {
+            this.progress = 0;
+        }
+    }
+    
+    draw(ctx, boardOffsetX, boardOffsetY, cellSize) {
+        const x = this.x1 + (this.x2 - this.x1) * this.progress;
+        const y = this.y1 + (this.y2 - this.y1) * this.progress;
+        
+        const screenX = boardOffsetX + (x + 0.5) * cellSize;
+        const screenY = boardOffsetY + (y + 0.5) * cellSize;
+        
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
 
 function initGame(gameId, playerId) {
     window.gameId = gameId;
@@ -32,11 +73,31 @@ function initGame(gameId, playerId) {
             }
         }
         
+        // Update light particles from beam segments
+        updateLightParticles();
+        
+        // Update timer
+        if (state.time_remaining !== undefined) {
+            timeRemaining = state.time_remaining;
+            updateTimerDisplay();
+        }
+        
         updateUI();
         renderBoard();
     });
     
+    socket.on('preview_update', (data) => {
+        previewTerritory = data.territory;
+        renderBoard();
+    });
+    
     socket.on('game_over', (data) => {
+        if (animationFrame) {
+            cancelAnimationFrame(animationFrame);
+        }
+        if (timerInterval) {
+            clearInterval(timerInterval);
+        }
         showGameOver(data);
     });
     
@@ -49,6 +110,10 @@ function initGame(gameId, playerId) {
     
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleCanvasHover);
+    canvas.addEventListener('mouseleave', () => {
+        previewTerritory = null;
+        renderBoard();
+    });
     
     document.getElementById('passTurnBtn').addEventListener('click', () => {
         socket.emit('pass_turn', {
@@ -59,6 +124,71 @@ function initGame(gameId, playerId) {
     
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    
+    // Start animation loop
+    animate();
+    
+    // Start timer update interval
+    timerInterval = setInterval(() => {
+        if (gameState && gameState.state === 'playing') {
+            timeRemaining = Math.max(0, timeRemaining - 1);
+            updateTimerDisplay();
+        }
+    }, 1000);
+}
+
+function updateLightParticles() {
+    if (!gameState || !gameState.light_beam_segments) return;
+    
+    // Clear old particles
+    lightParticles = [];
+    
+    // Create particles for each beam segment
+    gameState.light_beam_segments.forEach(segment => {
+        // Create 3-5 particles per segment
+        const numParticles = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < numParticles; i++) {
+            lightParticles.push(new LightParticle(
+                segment.x1,
+                segment.y1,
+                segment.x2,
+                segment.y2,
+                segment.color
+            ));
+        }
+    });
+}
+
+function animate() {
+    // Update particles
+    lightParticles.forEach(particle => particle.update());
+    
+    // Render
+    renderBoard();
+    
+    // Continue animation
+    animationFrame = requestAnimationFrame(animate);
+}
+
+function updateTimerDisplay() {
+    const timerElement = document.getElementById('turnTimer');
+    if (!timerElement) return;
+    
+    const minutes = Math.floor(timeRemaining / 60);
+    const seconds = timeRemaining % 60;
+    timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    
+    // Warning colors
+    if (timeRemaining <= 15) {
+        timerElement.style.color = '#FF6B6B';
+        timerElement.style.animation = 'pulse 1s infinite';
+    } else if (timeRemaining <= 30) {
+        timerElement.style.color = '#FFD93D';
+        timerElement.style.animation = 'none';
+    } else {
+        timerElement.style.color = 'var(--text-light)';
+        timerElement.style.animation = 'none';
+    }
 }
 
 function resizeCanvas() {
@@ -104,6 +234,12 @@ function updateUI() {
             scoreItem.classList.add('current-player');
         }
         
+        // Check if player is disconnected
+        const isDisconnected = gameState.disconnected_players && gameState.disconnected_players.includes(idx);
+        if (isDisconnected) {
+            scoreItem.classList.add('disconnected');
+        }
+        
         const breakdown = score.breakdown;
         const progressPercent = Math.min(100, (score.score / gameState.win_points) * 100);
         
@@ -111,7 +247,7 @@ function updateUI() {
             <div class="score-item-left">
                 <div class="score-color" style="background-color: ${score.color}"></div>
                 <div class="score-details">
-                    <span class="score-name">${score.player}</span>
+                    <span class="score-name">${score.player}${isDisconnected ? ' (DC)' : ''}</span>
                     <div class="score-breakdown-mini">
                         Territory: ${breakdown.base_territory} | 
                         Combos: ${breakdown.combos.total} | 
@@ -142,15 +278,21 @@ function updateUI() {
             playerItem.classList.add('active');
         }
         
+        const isDisconnected = gameState.disconnected_players && gameState.disconnected_players.includes(idx);
+        const missedTurns = gameState.missed_turns ? gameState.missed_turns[idx] || 0 : 0;
+        
         playerItem.innerHTML = `
             <div class="player-info-color" style="background-color: ${player.color}"></div>
-            <span class="player-info-name">${player.username}${player.id === playerId ? ' (You)' : ''}</span>
+            <span class="player-info-name">
+                ${player.username}${player.id === playerId ? ' (You)' : ''}
+                ${isDisconnected ? ' [REMOVED]' : missedTurns > 0 ? ` [${missedTurns}/3]` : ''}
+            </span>
         `;
         
         playersInfo.appendChild(playerItem);
     });
     
-    // Update inventory with new piece
+    // Update inventory
     if (myPlayerIndex !== -1) {
         const inventory = gameState.player_inventory[myPlayerIndex];
         const inventoryDiv = document.getElementById('inventory');
@@ -193,7 +335,6 @@ function updateUI() {
             inventoryDiv.appendChild(item);
         });
         
-        // Show objectives
         updateObjectivesDisplay();
     }
     
@@ -295,6 +436,7 @@ function handleCanvasClick(e) {
 
 function handleCanvasHover(e) {
     if (!gameState || gameState.current_player !== myPlayerIndex || !selectedPiece) {
+        previewTerritory = null;
         return;
     }
     
@@ -308,7 +450,25 @@ function handleCanvasHover(e) {
     canvas.hoverX = gridX;
     canvas.hoverY = gridY;
     
-    renderBoard();
+    // Request preview from server
+    if (gridX >= 0 && gridX < gameState.board_size && gridY >= 0 && gridY < gameState.board_size) {
+        if (gameState.board[gridY][gridX] === null && 
+            !gameState.protected_zones.some(([px, py]) => px === gridX && py === gridY)) {
+            
+            socket.emit('request_preview', {
+                game_id: gameId,
+                player_id: playerId,
+                x: gridX,
+                y: gridY,
+                piece_type: selectedPiece,
+                rotation: selectedRotation
+            });
+        } else {
+            previewTerritory = null;
+        }
+    } else {
+        previewTerritory = null;
+    }
 }
 
 function placePiece(x, y) {
@@ -323,6 +483,7 @@ function placePiece(x, y) {
     
     selectedPiece = null;
     selectedRotation = 0;
+    previewTerritory = null;
 }
 
 function renderBoard() {
@@ -333,7 +494,9 @@ function renderBoard() {
     ctx.fillStyle = '#0f1419';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    drawTerritory();
+    // Draw territory (current or preview)
+    const territoryToDraw = previewTerritory || gameState.territory;
+    drawTerritory(territoryToDraw, !!previewTerritory);
     
     // Draw amplifier tiles
     if (gameState.amplifier_tiles) {
@@ -354,7 +517,6 @@ function renderBoard() {
                 cellSize - 4
             );
             
-            // Draw 2x indicator
             ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
             ctx.font = 'bold 12px Arial';
             ctx.textAlign = 'center';
@@ -378,6 +540,18 @@ function renderBoard() {
             );
         });
     }
+    
+    // Draw light beam segments
+    if (gameState.light_beam_segments) {
+        gameState.light_beam_segments.forEach(segment => {
+            drawLightBeam(segment);
+        });
+    }
+    
+    // Draw animated light particles
+    lightParticles.forEach(particle => {
+        particle.draw(ctx, boardOffsetX, boardOffsetY, cellSize);
+    });
     
     // Draw grid
     ctx.strokeStyle = '#2a2a4e';
@@ -404,26 +578,62 @@ function renderBoard() {
     }
 }
 
-function drawTerritory() {
-    if (!gameState.territory) return;
+function drawLightBeam(segment) {
+    const x1 = boardOffsetX + (segment.x1 + 0.5) * cellSize;
+    const y1 = boardOffsetY + (segment.y1 + 0.5) * cellSize;
+    const x2 = boardOffsetX + (segment.x2 + 0.5) * cellSize;
+    const y2 = boardOffsetY + (segment.y2 + 0.5) * cellSize;
+    
+    // Draw beam line
+    ctx.strokeStyle = segment.color + '40';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    
+    // Draw glow
+    ctx.strokeStyle = segment.color + '20';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+}
+
+function drawTerritory(territory, isPreview) {
+    if (!territory) return;
     
     const boardSize = gameState.board_size;
+    const alpha = isPreview ? '30' : '20';
     
     for (let y = 0; y < boardSize; y++) {
         for (let x = 0; x < boardSize; x++) {
-            const controllers = gameState.territory[y][x];
+            const controllers = territory[y][x];
             
             if (controllers.length === 1) {
                 const playerIdx = controllers[0];
                 const color = gameState.players[playerIdx].color;
                 
-                ctx.fillStyle = color + '20';
+                ctx.fillStyle = color + alpha;
                 ctx.fillRect(
                     boardOffsetX + x * cellSize + 1,
                     boardOffsetY + y * cellSize + 1,
                     cellSize - 2,
                     cellSize - 2
                 );
+                
+                // Add pulsing effect for preview
+                if (isPreview) {
+                    ctx.strokeStyle = color + '60';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(
+                        boardOffsetX + x * cellSize + 1,
+                        boardOffsetY + y * cellSize + 1,
+                        cellSize - 2,
+                        cellSize - 2
+                    );
+                }
             }
         }
     }
@@ -433,6 +643,11 @@ function drawLightSources() {
     if (!gameState.light_sources) return;
     
     gameState.light_sources.forEach(source => {
+        // Skip disconnected players
+        if (gameState.disconnected_players && gameState.disconnected_players.includes(source.player)) {
+            return;
+        }
+        
         const x = source.x === -1 ? -0.5 : 
                   source.x === gameState.board_size ? gameState.board_size - 0.5 : 
                   source.x;
@@ -545,7 +760,6 @@ function drawPiece(x, y, piece) {
         ctx.fillRect(-size / 2, -size / 2, size, size);
         ctx.strokeRect(-size / 2, -size / 2, size, size);
     } else if (piece.type === 'splitter') {
-        // Draw splitter as X shape
         ctx.beginPath();
         ctx.moveTo(-size / 2, -size / 2);
         ctx.lineTo(size / 2, size / 2);
@@ -570,7 +784,6 @@ function drawHoverPreview(x, y) {
         return;
     }
     
-    // Check if in protected zone
     if (gameState.protected_zones && gameState.protected_zones.some(([px, py]) => px === x && py === y)) {
         return;
     }
@@ -644,6 +857,7 @@ function showGameOver(data) {
                     <p>Objectives: ${breakdown.objectives.total}</p>
                 </div>
             ` : ''}
+            ${data.reason ? `<p style="color: #FFD93D; margin-top: 10px;">${data.reason}</p>` : ''}
         `;
     }
     

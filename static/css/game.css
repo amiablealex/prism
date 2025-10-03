@@ -32,6 +32,44 @@
 .header-center {
     display: flex;
     justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.turn-timer-display {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+}
+
+.timer-label {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+.turn-timer {
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
+    font-size: 1.3rem;
+    color: var(--text-light);
+}
+
+@keyframes pulse-timer {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.score-item.disconnected {
+    opacity: 0.5;
+    background: repeating-linear-gradient(
+        45deg,
+        var(--dark-bg),
+        var(--dark-bg) 10px,
+        rgba(255, 107, 107, 0.1) 10px,
+        rgba(255, 107, 107, 0.1) 20px
+    );
 }
 
 .header-right {

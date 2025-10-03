@@ -4,6 +4,8 @@ import secrets
 import json
 from datetime import datetime, timedelta
 import os
+import threading
+import time
 from lobby_manager import LobbyManager
 from game_logic import PrismWarsGame
 
@@ -16,6 +18,35 @@ lobby_manager = LobbyManager()
 
 # Ensure data directory exists
 os.makedirs('data/games', exist_ok=True)
+
+# Turn timer check thread
+def check_turn_timers():
+    """Background thread to check for turn timeouts"""
+    while True:
+        try:
+            time.sleep(1)  # Check every second
+            
+            for game_id, game in list(lobby_manager.games.items()):
+                if game.state == 'playing':
+                    if game.check_turn_timeout():
+                        # Turn timed out
+                        game_ended = game.handle_turn_timeout()
+                        
+                        # Broadcast updated state
+                        socketio.emit('game_state_update', game.get_state(), room=game_id)
+                        
+                        if game_ended and game.state == 'finished':
+                            socketio.emit('game_over', {
+                                'winner': game.winner,
+                                'final_scores': game.get_scores(),
+                                'reason': 'Player disconnections'
+                            }, room=game_id)
+        except Exception as e:
+            print(f"Error in turn timer thread: {e}")
+
+# Start timer thread
+timer_thread = threading.Thread(target=check_turn_timers, daemon=True)
+timer_thread.start()
 
 def cleanup_old_games():
     """Remove games older than 7 days"""
@@ -45,11 +76,9 @@ def create_game():
     if num_players < 2 or num_players > 4:
         return jsonify({'error': 'Invalid number of players'}), 400
     
-    # Generate player ID
     player_id = secrets.token_hex(16)
     session['player_id'] = player_id
     
-    # Create game
     game_id = lobby_manager.create_game(num_players)
     lobby_manager.add_player_to_game(game_id, player_id, username)
     
@@ -73,7 +102,6 @@ def join_game():
     game = lobby_manager.games[game_id]
     
     if game.state != 'waiting':
-        # Check if this is a reconnection
         player_id = session.get('player_id')
         if player_id and player_id in [p['id'] for p in game.players]:
             return jsonify({
@@ -86,11 +114,9 @@ def join_game():
     if len(game.players) >= game.max_players:
         return jsonify({'error': 'Game is full'}), 400
     
-    # Generate player ID
     player_id = secrets.token_hex(16)
     session['player_id'] = player_id
     
-    # Join game
     lobby_manager.add_player_to_game(game_id, player_id, username)
     
     return jsonify({
@@ -150,14 +176,12 @@ def handle_join_lobby(data):
     join_room(game_id)
     game = lobby_manager.games[game_id]
     
-    # Send current game state to the joining player
     emit('lobby_update', {
         'players': game.players,
         'max_players': game.max_players,
         'state': game.state
     })
     
-    # Notify others
     emit('lobby_update', {
         'players': game.players,
         'max_players': game.max_players,
@@ -175,22 +199,16 @@ def handle_player_ready(data):
     game = lobby_manager.games[game_id]
     lobby_manager.set_player_ready(game_id, player_id)
     
-    # Broadcast updated lobby state
     emit('lobby_update', {
         'players': game.players,
         'max_players': game.max_players,
         'state': game.state
     }, room=game_id)
     
-    # Check if all players are ready and minimum players met
     if len(game.players) >= 2 and all(p['ready'] for p in game.players):
-        # Start game
         lobby_manager.start_game(game_id)
-        
-        # Save initial game state
         save_game_state(game_id)
         
-        # Notify all players to transition to game
         emit('game_starting', {
             'game_id': game_id
         }, room=game_id)
@@ -207,8 +225,46 @@ def handle_join_game_room(data):
     join_room(game_id)
     game = lobby_manager.games[game_id]
     
-    # Send full game state
     emit('game_state_update', game.get_state())
+
+@socketio.on('request_preview')
+def handle_request_preview(data):
+    """Handle preview request for light path visualization"""
+    game_id = data['game_id'].upper()
+    player_id = data['player_id']
+    x = data['x']
+    y = data['y']
+    piece_type = data['piece_type']
+    rotation = data.get('rotation', 0)
+    
+    if game_id not in lobby_manager.games:
+        return
+    
+    game = lobby_manager.games[game_id]
+    
+    # Validate it's this player's turn
+    if game.players[game.current_player]['id'] != player_id:
+        return
+    
+    # Check if valid placement
+    if x < 0 or x >= game.board_size or y < 0 or y >= game.board_size:
+        return
+    
+    if game.board[y][x] is not None:
+        return
+    
+    if (x, y) in game.protected_zones:
+        return
+    
+    # Calculate preview
+    try:
+        preview_territory = game.calculate_light_paths_with_preview(x, y, piece_type, rotation)
+        
+        emit('preview_update', {
+            'territory': [[list(cell) for cell in row] for row in preview_territory]
+        })
+    except Exception as e:
+        print(f"Error calculating preview: {e}")
 
 @socketio.on('place_piece')
 def handle_place_piece(data):
@@ -225,23 +281,18 @@ def handle_place_piece(data):
     
     game = lobby_manager.games[game_id]
     
-    # Validate it's this player's turn
     current_player_idx = game.current_player
     if game.players[current_player_idx]['id'] != player_id:
         emit('error', {'message': 'Not your turn'})
         return
     
-    # Attempt to place piece
     success, message = game.place_piece(x, y, piece_type, rotation)
     
     if success:
-        # Save game state
         save_game_state(game_id)
         
-        # Broadcast updated game state to all players
         emit('game_state_update', game.get_state(), room=game_id)
         
-        # Check for game over
         if game.state == 'finished':
             emit('game_over', {
                 'winner': game.winner,
@@ -261,22 +312,17 @@ def handle_pass_turn(data):
     
     game = lobby_manager.games[game_id]
     
-    # Validate it's this player's turn
     current_player_idx = game.current_player
     if game.players[current_player_idx]['id'] != player_id:
         emit('error', {'message': 'Not your turn'})
         return
     
-    # Pass turn
     game.next_turn()
     
-    # Save game state
     save_game_state(game_id)
     
-    # Broadcast updated game state
     emit('game_state_update', game.get_state(), room=game_id)
     
-    # Check for game over
     if game.state == 'finished':
         emit('game_over', {
             'winner': game.winner,
@@ -293,7 +339,4 @@ def save_game_state(game_id):
 
 if __name__ == '__main__':
     cleanup_old_games()
-    # For development
     socketio.run(app, host='0.0.0.0', port=5000, debug=True)
-    # For production with gunicorn, use:
-    # gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 app:app
