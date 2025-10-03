@@ -12,7 +12,6 @@ function initGame(gameId, playerId) {
     window.gameId = gameId;
     window.playerId = playerId;
     
-    // Initialize socket
     socket = io();
     
     socket.on('connect', () => {
@@ -26,7 +25,6 @@ function initGame(gameId, playerId) {
     socket.on('game_state_update', (state) => {
         gameState = state;
         
-        // Find my player index
         for (let i = 0; i < state.players.length; i++) {
             if (state.players[i].id === playerId) {
                 myPlayerIndex = i;
@@ -46,15 +44,12 @@ function initGame(gameId, playerId) {
         alert(data.message);
     });
     
-    // Initialize canvas
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
     
-    // Set up canvas click handler
     canvas.addEventListener('click', handleCanvasClick);
     canvas.addEventListener('mousemove', handleCanvasHover);
     
-    // Set up pass turn button
     document.getElementById('passTurnBtn').addEventListener('click', () => {
         socket.emit('pass_turn', {
             game_id: gameId,
@@ -62,7 +57,6 @@ function initGame(gameId, playerId) {
         });
     });
     
-    // Resize canvas to fit container
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 }
@@ -89,11 +83,9 @@ function resizeCanvas() {
 function updateUI() {
     if (!gameState) return;
     
-    // Update round counter
     document.getElementById('roundNumber').textContent = gameState.round_number;
     document.getElementById('maxRounds').textContent = gameState.max_rounds;
     
-    // Update current turn indicator
     const currentPlayer = gameState.players[gameState.current_player];
     const turnIndicator = document.querySelector('.turn-indicator');
     const turnText = document.querySelector('.current-turn span');
@@ -101,7 +93,7 @@ function updateUI() {
     turnIndicator.style.backgroundColor = currentPlayer.color;
     turnText.textContent = `${currentPlayer.username}'s Turn`;
     
-    // Update scores
+    // Update scores with breakdown
     const scoresList = document.getElementById('scoresList');
     scoresList.innerHTML = '';
     
@@ -112,12 +104,28 @@ function updateUI() {
             scoreItem.classList.add('current-player');
         }
         
+        const breakdown = score.breakdown;
+        const progressPercent = Math.min(100, (score.score / gameState.win_points) * 100);
+        
         scoreItem.innerHTML = `
             <div class="score-item-left">
                 <div class="score-color" style="background-color: ${score.color}"></div>
-                <span class="score-name">${score.player}</span>
+                <div class="score-details">
+                    <span class="score-name">${score.player}</span>
+                    <div class="score-breakdown-mini">
+                        Territory: ${breakdown.base_territory} | 
+                        Combos: ${breakdown.combos.total} | 
+                        Objectives: ${breakdown.objectives.total}
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progressPercent}%; background-color: ${score.color}"></div>
+                    </div>
+                </div>
             </div>
-            <span class="score-value">${score.score}</span>
+            <div class="score-right">
+                <span class="score-value">${score.score}</span>
+                <span class="score-target">/${gameState.win_points}</span>
+            </div>
         `;
         
         scoresList.appendChild(scoreItem);
@@ -142,7 +150,7 @@ function updateUI() {
         playersInfo.appendChild(playerItem);
     });
     
-    // Update inventory (only for current player)
+    // Update inventory with new piece
     if (myPlayerIndex !== -1) {
         const inventory = gameState.player_inventory[myPlayerIndex];
         const inventoryDiv = document.getElementById('inventory');
@@ -150,6 +158,7 @@ function updateUI() {
         
         const pieces = [
             { type: 'mirror', icon: '🪞', label: 'Mirror' },
+            { type: 'splitter', icon: '✂️', label: 'Splitter' },
             { type: 'prism', icon: '◆', label: 'Prism' },
             { type: 'blocker', icon: '⬛', label: 'Blocker' }
         ];
@@ -183,14 +192,41 @@ function updateUI() {
             
             inventoryDiv.appendChild(item);
         });
+        
+        // Show objectives
+        updateObjectivesDisplay();
     }
     
-    // Update selected piece info
     updateSelectedPieceInfo();
     
-    // Enable/disable pass turn button
     const passTurnBtn = document.getElementById('passTurnBtn');
     passTurnBtn.disabled = gameState.current_player !== myPlayerIndex;
+}
+
+function updateObjectivesDisplay() {
+    const objectivesDiv = document.getElementById('objectivesDisplay');
+    if (!objectivesDiv || !gameState.objectives || myPlayerIndex === -1) return;
+    
+    const myObjectives = gameState.objectives[myPlayerIndex];
+    const myScore = gameState.scores[myPlayerIndex];
+    const completedObjs = myScore.breakdown.objectives.completed;
+    
+    objectivesDiv.innerHTML = '<h4>Your Objectives</h4>';
+    
+    myObjectives.forEach(obj => {
+        const isCompleted = completedObjs.some(c => c.id === obj.id);
+        const objDiv = document.createElement('div');
+        objDiv.className = 'objective-item' + (isCompleted ? ' completed' : '');
+        objDiv.innerHTML = `
+            <div class="objective-header">
+                <span class="objective-icon">${isCompleted ? '✓' : '○'}</span>
+                <span class="objective-name">${obj.name}</span>
+                <span class="objective-points">+${obj.points}</span>
+            </div>
+            <div class="objective-description">${obj.description}</div>
+        `;
+        objectivesDiv.appendChild(objDiv);
+    });
 }
 
 function selectPiece(type, label, icon) {
@@ -207,20 +243,21 @@ function updateSelectedPieceInfo() {
     if (selectedPiece) {
         const descriptions = {
             'mirror': 'Reflects light beams at 90° angles. Rotate to change reflection direction.',
-            'prism': 'Splits light into three beams: straight, left, and right. Creates powerful area coverage.',
-            'blocker': 'Completely stops light beams. Use strategically to block opponents.'
+            'prism': 'Splits light into three beams: straight, left, and right. Creates powerful area coverage. LIMITED: Only 1 per player!',
+            'blocker': 'Stops light beams (penetrates first blocker only). Cannot be placed near enemy light sources.',
+            'splitter': 'Splits light into two perpendicular beams. More focused than prisms.'
         };
         
         const labels = {
             'mirror': 'Mirror 🪞',
             'prism': 'Prism ◆',
-            'blocker': 'Blocker ⬛'
+            'blocker': 'Blocker ⬛',
+            'splitter': 'Splitter ✂️'
         };
         
         selectedPieceName.textContent = labels[selectedPiece];
         pieceDescription.textContent = descriptions[selectedPiece];
         
-        // Show rotation controls for mirror and prism
         if (selectedPiece === 'mirror' || selectedPiece === 'prism') {
             rotationControls.style.display = 'flex';
             document.getElementById('rotationDisplay').textContent = selectedRotation + '°';
@@ -268,7 +305,6 @@ function handleCanvasHover(e) {
     const gridX = Math.floor((x - boardOffsetX) / cellSize);
     const gridY = Math.floor((y - boardOffsetY) / cellSize);
     
-    // Store hover position for rendering
     canvas.hoverX = gridX;
     canvas.hoverY = gridY;
     
@@ -285,7 +321,6 @@ function placePiece(x, y) {
         rotation: selectedRotation
     });
     
-    // Deselect piece after placement
     selectedPiece = null;
     selectedRotation = 0;
 }
@@ -295,38 +330,74 @@ function renderBoard() {
     
     const boardSize = gameState.board_size;
     
-    // Clear canvas
     ctx.fillStyle = '#0f1419';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw territory first (as background)
     drawTerritory();
+    
+    // Draw amplifier tiles
+    if (gameState.amplifier_tiles) {
+        gameState.amplifier_tiles.forEach(([x, y]) => {
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
+            ctx.fillRect(
+                boardOffsetX + x * cellSize + 2,
+                boardOffsetY + y * cellSize + 2,
+                cellSize - 4,
+                cellSize - 4
+            );
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.6)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+                boardOffsetX + x * cellSize + 2,
+                boardOffsetY + y * cellSize + 2,
+                cellSize - 4,
+                cellSize - 4
+            );
+            
+            // Draw 2x indicator
+            ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('2x', 
+                boardOffsetX + (x + 0.5) * cellSize,
+                boardOffsetY + (y + 0.5) * cellSize
+            );
+        });
+    }
+    
+    // Draw protected zones
+    if (gameState.protected_zones) {
+        gameState.protected_zones.forEach(([x, y]) => {
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.15)';
+            ctx.fillRect(
+                boardOffsetX + x * cellSize + 1,
+                boardOffsetY + y * cellSize + 1,
+                cellSize - 2,
+                cellSize - 2
+            );
+        });
+    }
     
     // Draw grid
     ctx.strokeStyle = '#2a2a4e';
     ctx.lineWidth = 1;
     
     for (let i = 0; i <= boardSize; i++) {
-        // Vertical lines
         ctx.beginPath();
         ctx.moveTo(boardOffsetX + i * cellSize, boardOffsetY);
         ctx.lineTo(boardOffsetX + i * cellSize, boardOffsetY + boardSize * cellSize);
         ctx.stroke();
         
-        // Horizontal lines
         ctx.beginPath();
         ctx.moveTo(boardOffsetX, boardOffsetY + i * cellSize);
         ctx.lineTo(boardOffsetX + boardSize * cellSize, boardOffsetY + i * cellSize);
         ctx.stroke();
     }
     
-    // Draw light sources
     drawLightSources();
-    
-    // Draw pieces
     drawPieces();
     
-    // Draw hover preview
     if (canvas.hoverX !== undefined && canvas.hoverY !== undefined && 
         gameState.current_player === myPlayerIndex && selectedPiece) {
         drawHoverPreview(canvas.hoverX, canvas.hoverY);
@@ -346,7 +417,7 @@ function drawTerritory() {
                 const playerIdx = controllers[0];
                 const color = gameState.players[playerIdx].color;
                 
-                ctx.fillStyle = color + '20'; // 20 = low opacity
+                ctx.fillStyle = color + '20';
                 ctx.fillRect(
                     boardOffsetX + x * cellSize + 1,
                     boardOffsetY + y * cellSize + 1,
@@ -372,7 +443,6 @@ function drawLightSources() {
         const centerX = boardOffsetX + (x + 0.5) * cellSize;
         const centerY = boardOffsetY + (y + 0.5) * cellSize;
         
-        // Draw glow
         const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, cellSize * 0.6);
         gradient.addColorStop(0, source.color + '80');
         gradient.addColorStop(1, source.color + '00');
@@ -384,13 +454,11 @@ function drawLightSources() {
             cellSize * 1.2
         );
         
-        // Draw source
         ctx.fillStyle = source.color;
         ctx.beginPath();
         ctx.arc(centerX, centerY, cellSize * 0.25, 0, Math.PI * 2);
         ctx.fill();
         
-        // Draw direction arrow
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         const arrowSize = cellSize * 0.3;
@@ -437,7 +505,6 @@ function drawPiece(x, y, piece) {
     const centerY = boardOffsetY + (y + 0.5) * cellSize;
     const size = cellSize * 0.6;
     
-    // Draw piece background
     ctx.fillStyle = piece.color + '40';
     ctx.fillRect(
         centerX - size / 2,
@@ -455,13 +522,11 @@ function drawPiece(x, y, piece) {
     ctx.lineWidth = 2;
     
     if (piece.type === 'mirror') {
-        // Draw mirror as a line
         ctx.beginPath();
         ctx.moveTo(-size / 2, -size / 2);
         ctx.lineTo(size / 2, size / 2);
         ctx.stroke();
         
-        // Draw reflection indicators
         ctx.beginPath();
         ctx.arc(-size / 3, -size / 3, size * 0.15, 0, Math.PI * 2);
         ctx.fill();
@@ -469,7 +534,6 @@ function drawPiece(x, y, piece) {
         ctx.arc(size / 3, size / 3, size * 0.15, 0, Math.PI * 2);
         ctx.fill();
     } else if (piece.type === 'prism') {
-        // Draw prism as a triangle
         ctx.beginPath();
         ctx.moveTo(0, -size / 2);
         ctx.lineTo(-size / 2, size / 2);
@@ -478,9 +542,20 @@ function drawPiece(x, y, piece) {
         ctx.fill();
         ctx.stroke();
     } else if (piece.type === 'blocker') {
-        // Draw blocker as a solid square
         ctx.fillRect(-size / 2, -size / 2, size, size);
         ctx.strokeRect(-size / 2, -size / 2, size, size);
+    } else if (piece.type === 'splitter') {
+        // Draw splitter as X shape
+        ctx.beginPath();
+        ctx.moveTo(-size / 2, -size / 2);
+        ctx.lineTo(size / 2, size / 2);
+        ctx.moveTo(-size / 2, size / 2);
+        ctx.lineTo(size / 2, -size / 2);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        ctx.arc(0, 0, size * 0.15, 0, Math.PI * 2);
+        ctx.fill();
     }
     
     ctx.restore();
@@ -495,11 +570,15 @@ function drawHoverPreview(x, y) {
         return;
     }
     
+    // Check if in protected zone
+    if (gameState.protected_zones && gameState.protected_zones.some(([px, py]) => px === x && py === y)) {
+        return;
+    }
+    
     const centerX = boardOffsetX + (x + 0.5) * cellSize;
     const centerY = boardOffsetY + (y + 0.5) * cellSize;
     const size = cellSize * 0.6;
     
-    // Draw preview with transparency
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = gameState.players[myPlayerIndex].color + '60';
     ctx.fillRect(
@@ -530,6 +609,13 @@ function drawHoverPreview(x, y) {
         ctx.stroke();
     } else if (selectedPiece === 'blocker') {
         ctx.strokeRect(-size / 2, -size / 2, size, size);
+    } else if (selectedPiece === 'splitter') {
+        ctx.beginPath();
+        ctx.moveTo(-size / 2, -size / 2);
+        ctx.lineTo(size / 2, size / 2);
+        ctx.moveTo(-size / 2, size / 2);
+        ctx.lineTo(size / 2, -size / 2);
+        ctx.stroke();
     }
     
     ctx.restore();
@@ -547,9 +633,17 @@ function showGameOver(data) {
             <p>Multiple players share the victory!</p>
         `;
     } else {
+        const breakdown = data.winner.breakdown;
         winnerInfo.innerHTML = `
             <div class="winner-name">${data.winner.username} Wins!</div>
-            <p style="color: ${data.winner.color}">Territory Controlled: ${data.winner.score}</p>
+            <p style="color: ${data.winner.color}">Total Score: ${data.winner.score} points</p>
+            ${breakdown ? `
+                <div class="winner-breakdown">
+                    <p>Territory: ${breakdown.base_territory}</p>
+                    <p>Combos: ${breakdown.combos.total}</p>
+                    <p>Objectives: ${breakdown.objectives.total}</p>
+                </div>
+            ` : ''}
         `;
     }
     
@@ -563,10 +657,16 @@ function showGameOver(data) {
             scoreItem.classList.add('winner');
         }
         
+        const breakdown = score.breakdown;
         scoreItem.innerHTML = `
             <div class="final-score-left">
                 <div class="final-score-color" style="background-color: ${score.color}"></div>
-                <span>${score.player}</span>
+                <div>
+                    <div>${score.player}</div>
+                    <small style="color: #999">
+                        T:${breakdown.base_territory} | C:${breakdown.combos.total} | O:${breakdown.objectives.total}
+                    </small>
+                </div>
             </div>
             <span class="final-score-value">${score.score}</span>
         `;

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prism Wars - Strategic Light Battle</title>
+    <title>Prism Wars v2.0 - Strategic Light Battle</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 <body>
@@ -20,10 +20,58 @@
                 <h2>How to Play</h2>
                 <div class="rules-grid">
                     <div class="rule-card">
-                        <div class="rule-icon">🎯</div>
-                        <h3>Victory</h3>
-                        <p>Control the most territory after 20 rounds to win</p>
+                        <div class="rule-icon">🪞</div>
+                        <h3>Mirrors</h3>
+                        <p>Reflect light beams at 90° angles. Your most versatile tool (15 available)</p>
                     </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">✂️</div>
+                        <h3>Splitters</h3>
+                        <p>Split light into 2 perpendicular beams. Precise area control (6 available)</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">◆</div>
+                        <h3>Prisms</h3>
+                        <p>Split light into 3 beams for massive coverage. Use wisely - only 1 per player!</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">⬛</div>
+                        <h3>Blockers</h3>
+                        <p>Stop enemy light. Light penetrates first blocker, stopped by second (8 available)</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">🌟</div>
+                        <h3>Amplifiers</h3>
+                        <p>Golden 2x tiles randomly placed. Territory on these tiles counts double!</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">🎯</div>
+                        <h3>Objectives</h3>
+                        <p>Complete secret objectives for bonus points. Control corners, edges, or spread territory</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">⚡</div>
+                        <h3>Combos</h3>
+                        <p>Chain 3+ mirrors or use prisms effectively to earn combo bonuses</p>
+                    </div>
+                    <div class="rule-card">
+                        <div class="rule-icon">🏆</div>
+                        <h3>Victory</h3>
+                        <p>First to 75 points wins! Points = Territory + Objectives + Combos</p>
+                    </div>
+                </div>
+                
+                <div class="version-notice">
+                    <p><strong>🎮 Version 2.0 Features:</strong></p>
+                    <ul>
+                        <li>✨ NEW Splitter piece - splits into 2 beams</li>
+                        <li>🛡️ Protected zones around light sources</li>
+                        <li>💎 Only 1 Prism per player - make it count!</li>
+                        <li>🌟 Random amplifier tiles worth 2x points</li>
+                        <li>🎯 Secret objectives for each player</li>
+                        <li>⚡ Combo bonuses for strategic placement</li>
+                        <li>🏆 Clear win condition: Race to 75 points!</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -159,26 +207,9 @@
             }
         });
 
-        // Auto-uppercase game ID input
         document.getElementById('gameId').addEventListener('input', (e) => {
             e.target.value = e.target.value.toUpperCase();
         });
     </script>
-
-                    <div class="rule-card">
-                        <div class="rule-icon">🪞</div>
-                        <h3>Mirrors</h3>
-                        <p>Reflect light beams at 90° angles to navigate the board</p>
-                    </div>
-                    <div class="rule-card">
-                        <div class="rule-icon">◆</div>
-                        <h3>Prisms</h3>
-                        <p>Split light into three beams for massive area control</p>
-                    </div>
-                    <div class="rule-card">
-                        <div class="rule-icon">⬛</div>
-                        <h3>Blockers</h3>
-                        <p>Stop enemy light and protect your territories</p>
-                    </div>
 </body>
 </html>

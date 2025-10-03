@@ -119,6 +119,7 @@
 .scores-panel,
 .players-panel,
 .inventory-panel,
+.objectives-panel,
 .actions-panel,
 .legend-panel {
     background: var(--card-bg);
@@ -130,19 +131,20 @@
 .scores-panel h3,
 .players-panel h3,
 .inventory-panel h3,
+.objectives-panel h4,
 .legend-panel h4 {
     margin-bottom: 15px;
     color: var(--secondary-color);
     font-size: 1.2rem;
 }
 
-/* Score Items */
+/* Score Items - Enhanced with breakdown */
 .score-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 12px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     background: var(--dark-bg);
     border: 2px solid var(--border-color);
     border-radius: 8px;
@@ -158,6 +160,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex: 1;
 }
 
 .score-color {
@@ -165,16 +168,57 @@
     height: 24px;
     border-radius: 50%;
     border: 2px solid white;
+    flex-shrink: 0;
+}
+
+.score-details {
+    flex: 1;
+    min-width: 0;
 }
 
 .score-name {
     font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.score-breakdown-mini {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+    border-radius: 3px;
+}
+
+.score-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex-shrink: 0;
 }
 
 .score-value {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--accent-color);
+    line-height: 1;
+}
+
+.score-target {
+    font-size: 0.9rem;
+    color: var(--text-dim);
 }
 
 /* Player Info Items */
@@ -318,6 +362,70 @@
     text-align: center;
 }
 
+/* Objectives Panel */
+.objectives-panel {
+    background: var(--card-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    padding: 15px;
+}
+
+.objectives-panel h4 {
+    margin-bottom: 12px;
+    color: var(--accent-color);
+    font-size: 1.1rem;
+}
+
+.objective-item {
+    padding: 10px;
+    margin-bottom: 10px;
+    background: var(--dark-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.objective-item.completed {
+    border-color: var(--secondary-color);
+    background: rgba(78, 205, 196, 0.1);
+}
+
+.objective-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+.objective-icon {
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
+    color: var(--text-dim);
+}
+
+.objective-item.completed .objective-icon {
+    color: var(--secondary-color);
+}
+
+.objective-name {
+    flex: 1;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.objective-points {
+    color: var(--accent-color);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.objective-description {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    padding-left: 28px;
+}
+
 /* Legend */
 .legend-item {
     display: flex;
@@ -378,6 +486,18 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+}
+
+.winner-breakdown {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.winner-breakdown p {
+    font-size: 1rem;
+    margin: 5px 0;
+    color: var(--text-dim);
 }
 
 #finalScores {
@@ -441,6 +561,7 @@
     .scores-panel,
     .players-panel,
     .inventory-panel,
+    .objectives-panel,
     .actions-panel,
     .legend-panel {
         min-width: 250px;
