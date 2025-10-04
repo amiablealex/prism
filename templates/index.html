@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prism Wars v4.0 - Strategic Light Battle</title>
+    <title>Prism Wars v4.5</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
 </head>
 <body>
@@ -14,88 +14,51 @@
                 Prism Wars
                 <span class="prism-icon">◆</span>
             </h1>
-            <p class="tagline">Bend light, control territory, dominate the board</p>
+            <p class="tagline">Strategic light battle - Control territory, complete objectives, win!</p>
             
             <div class="game-description">
                 <h2>How to Play</h2>
                 <div class="rules-grid">
                     <div class="rule-card">
                         <div class="rule-icon">⚡</div>
-                        <h3>Energy System</h3>
-                        <p>10 energy per turn. Place pieces (2-8 energy) or pick up your pieces (1 energy)</p>
+                        <h3>Energy</h3>
+                        <p>Start with 4, gain +2 per turn. Place pieces or save up. Placing ends your turn!</p>
                     </div>
                     <div class="rule-card">
                         <div class="rule-icon">🪞</div>
-                        <h3>Mirrors (8)</h3>
-                        <p>Reflect light at 90°. Cost: 2 energy. Your most efficient tool</p>
+                        <h3>Mirrors</h3>
+                        <p>Reflect light 90°. Cost: 2 energy. Chain 3+ for combo bonus</p>
                     </div>
                     <div class="rule-card">
                         <div class="rule-icon">✂️</div>
-                        <h3>Splitters (3)</h3>
-                        <p>Split into 2 perpendicular beams. Cost: 4 energy. Precise control</p>
+                        <h3>Splitters</h3>
+                        <p>2 perpendicular beams. Cost: 4 energy. Tactical control</p>
                     </div>
                     <div class="rule-card">
                         <div class="rule-icon">◆</div>
-                        <h3>Prism (1)</h3>
-                        <p>3 beams for massive coverage. Cost: 8 energy. Use wisely - only 1!</p>
+                        <h3>Prism</h3>
+                        <p>3 beams, massive coverage. Cost: 8 energy. Only 1 per player!</p>
                     </div>
                     <div class="rule-card">
                         <div class="rule-icon">⬛</div>
-                        <h3>Blockers (4)</h3>
-                        <p>Completely stop light. Cost: 3 energy. Can't place near sources</p>
+                        <h3>Blockers</h3>
+                        <p>Stop light completely. Cost: 3 energy. Can't place near sources</p>
                     </div>
                     <div class="rule-card">
                         <div class="rule-icon">🔄</div>
-                        <h3>Pickup & Replace</h3>
-                        <p>Pick up your pieces (1 energy) and reuse them strategically</p>
+                        <h3>Pickup</h3>
+                        <p>Cost: 1 energy. Doesn't end turn. Reposition your pieces</p>
                     </div>
                     <div class="rule-card">
                         <div class="rule-icon">🌟</div>
                         <h3>Amplifiers</h3>
-                        <p>Golden 2x tiles. Territory here counts double!</p>
-                    </div>
-                    <div class="rule-card">
-                        <div class="rule-icon">🎯</div>
-                        <h3>Objectives</h3>
-                        <p>Complete 2 secret objectives. Recalculated each turn!</p>
-                    </div>
-                    <div class="rule-card">
-                        <div class="rule-icon">⚡</div>
-                        <h3>Combos</h3>
-                        <p>Chain 3+ mirrors or use prisms well for bonus points</p>
+                        <p>Golden tiles = 3x points! Fight for control</p>
                     </div>
                     <div class="rule-card">
                         <div class="rule-icon">🏆</div>
-                        <h3>Victory</h3>
-                        <p>First to 75 points or highest after 15 rounds wins!</p>
+                        <h3>Win</h3>
+                        <p>First to 75 points or highest after 15 rounds. Points = Territory + Objectives + Combos</p>
                     </div>
-                    <div class="rule-card">
-                        <div class="rule-icon">👁️</div>
-                        <h3>Visual Controls</h3>
-                        <p>Toggle beams, particles, and players to reduce visual chaos</p>
-                    </div>
-                    <div class="rule-card">
-                        <div class="rule-icon">🔌</div>
-                        <h3>Auto-Reconnect</h3>
-                        <p>Refresh or disconnect? You can rejoin automatically!</p>
-                    </div>
-                </div>
-                
-                <div class="version-notice">
-                    <p><strong>🎮 Version 4.0 Features:</strong></p>
-                    <ul>
-                        <li>🔌 <strong>Auto-Reconnection</strong> - Resume games after refresh/disconnect</li>
-                        <li>⚡ <strong>Energy System</strong> - Strategic resource management (10 per turn)</li>
-                        <li>🔄 <strong>Pickup & Replace</strong> - Recycle your pieces</li>
-                        <li>👁️ <strong>Visual Controls</strong> - Toggle beams, particles, territory overlays</li>
-                        <li>🎨 <strong>Highlight Modes</strong> - Focus on your light or active player only</li>
-                        <li>📏 <strong>15x15 Board</strong> - More space, less chaos (was 12x12)</li>
-                        <li>💎 <strong>Reduced Pieces</strong> - 8 mirrors, 4 blockers, 3 splitters, 1 prism</li>
-                        <li>⬛ <strong>Full Blocker</strong> - Blockers stop all light (no penetration)</li>
-                        <li>🎯 <strong>Live Scoring</strong> - Objectives recalculated every turn</li>
-                        <li>💾 <strong>Game State Saves</strong> - Resume even after server restart</li>
-                        <li>❤️ <strong>Connection Health</strong> - 30s grace period for reconnection</li>
-                    </ul>
                 </div>
             </div>
         </div>
@@ -105,14 +68,13 @@
             <div class="menu-card" style="max-width: 600px;">
                 <h2>⚡ Resume Your Game</h2>
                 <p style="color: var(--text-dim); margin-bottom: 20px;">
-                    You have an active game session. Would you like to continue?
+                    You have an active game session
                 </p>
                 <div id="resumeGameInfo" style="background: var(--dark-bg); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                    <!-- Game info will be inserted here -->
                 </div>
                 <div style="display: flex; gap: 15px;">
                     <button id="resumeGameBtn" class="btn btn-primary" style="flex: 1;">Resume Game</button>
-                    <button id="newGameInsteadBtn" class="btn btn-secondary" style="flex: 1;">Start New Game</button>
+                    <button id="newGameInsteadBtn" class="btn btn-secondary" style="flex: 1;">Start New</button>
                 </div>
             </div>
         </div>
@@ -150,7 +112,7 @@
                     </div>
                     <div class="form-group">
                         <label for="gameId">Game Code</label>
-                        <input type="text" id="gameId" placeholder="Enter 6-character code" required maxlength="6" style="text-transform: uppercase;">
+                        <input type="text" id="gameId" placeholder="6-character code" required maxlength="6" style="text-transform: uppercase;">
                     </div>
                     <button type="submit" class="btn btn-secondary">Join Game</button>
                 </form>
@@ -165,7 +127,6 @@
         const joinForm = document.getElementById('joinGameForm');
         const errorMessage = document.getElementById('errorMessage');
 
-        // Session management
         function getSession() {
             const stored = localStorage.getItem('prismwars_session');
             if (!stored) return null;
@@ -185,12 +146,10 @@
             localStorage.removeItem('prismwars_session');
         }
 
-        // Check for existing session on page load
         window.addEventListener('DOMContentLoaded', async () => {
             const session = getSession();
             
             if (session) {
-                // Check if game still exists
                 try {
                     const response = await fetch('/check_game', {
                         method: 'POST',
@@ -205,10 +164,8 @@
                     const data = await response.json();
                     
                     if (data.exists) {
-                        // Show resume option
                         showResumeOption(session, data);
                     } else {
-                        // Game no longer exists
                         clearSession();
                     }
                 } catch (error) {
@@ -227,12 +184,8 @@
                              gameData.state === 'waiting' ? 'In Lobby' : 'Finished';
             
             resumeInfo.innerHTML = `
-                <p><strong>Game Code:</strong> ${session.gameId}</p>
-                <p><strong>Status:</strong> ${stateText}</p>
+                <p><strong>Code:</strong> ${session.gameId} | <strong>Status:</strong> ${stateText}</p>
                 <p><strong>Players:</strong> ${gameData.players}/${gameData.max_players}</p>
-                <p style="color: var(--text-dim); margin-top: 10px; font-size: 0.9rem;">
-                    Last active: ${new Date(session.lastActive).toLocaleString()}
-                </p>
             `;
             
             resumeSection.style.display = 'flex';
@@ -262,7 +215,7 @@
                         mainMenu.style.display = 'flex';
                     }
                 } catch (error) {
-                    showError('Network error. Please try again.');
+                    showError('Network error');
                     clearSession();
                     resumeSection.style.display = 'none';
                     mainMenu.style.display = 'flex';
@@ -310,7 +263,6 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Save session
                     const session = {
                         gameId: data.game_id,
                         playerId: data.player_id,
@@ -324,7 +276,7 @@
                     showError(data.error || 'Failed to create game');
                 }
             } catch (error) {
-                showError('Network error. Please try again.');
+                showError('Network error');
             }
         });
 
@@ -340,7 +292,7 @@
             }
 
             if (!gameId || gameId.length !== 6) {
-                showError('Please enter a valid 6-character game code');
+                showError('Please enter valid 6-character code');
                 return;
             }
 
@@ -359,7 +311,6 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Save session
                     const session = {
                         gameId: data.game_id,
                         playerId: data.player_id,
@@ -373,7 +324,7 @@
                     showError(data.error || 'Failed to join game');
                 }
             } catch (error) {
-                showError('Network error. Please try again.');
+                showError('Network error');
             }
         });
 

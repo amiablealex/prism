@@ -24,7 +24,7 @@ let highlightMyLight = false;
 let showOnlyActivePlayer = false;
 let pickupMode = false;
 
-// Session persistence
+// Session persistence functions
 function saveSession(gameId, playerId, playerName) {
     const session = {
         gameId: gameId,
@@ -42,7 +42,6 @@ function getSession() {
     const session = JSON.parse(stored);
     const hoursSinceActive = (Date.now() - session.lastActive) / (1000 * 60 * 60);
     
-    // Session expires after 6 hours
     if (hoursSinceActive > 6) {
         clearSession();
         return null;
@@ -63,7 +62,7 @@ function updateSessionActivity() {
     }
 }
 
-// Light beam animation
+// Light beam animation class
 class LightParticle {
     constructor(x1, y1, x2, y2, color, player) {
         this.x1 = x1;
@@ -104,7 +103,6 @@ function initGame(gameId, playerId) {
     window.gameId = gameId;
     window.playerId = playerId;
     
-    // Save session
     saveSession(gameId, playerId, 'Player');
     
     socket = io();
@@ -119,7 +117,6 @@ function initGame(gameId, playerId) {
             player_id: playerId
         });
         
-        // Start heartbeat
         startHeartbeat();
     });
     
@@ -128,7 +125,6 @@ function initGame(gameId, playerId) {
         connectionStatus = 'disconnected';
         updateConnectionStatus();
         
-        // Attempt reconnection
         setTimeout(() => {
             if (connectionStatus === 'disconnected') {
                 socket.connect();
@@ -196,7 +192,6 @@ function initGame(gameId, playerId) {
         renderBoard();
     });
     
-    // Event listeners for controls
     document.getElementById('passTurnBtn').addEventListener('click', () => {
         socket.emit('pass_turn', {
             game_id: gameId,
@@ -237,7 +232,7 @@ function startHeartbeat() {
                 player_id: window.playerId
             });
         }
-    }, 10000); // Every 10 seconds
+    }, 10000);
 }
 
 function updateConnectionStatus() {
@@ -266,7 +261,7 @@ function togglePickupMode() {
         btn.classList.add('active');
         btn.textContent = '🔄 Pickup Mode: ON';
         selectedPiece = null;
-        showNotification('Click your own pieces to pick them up', 'info');
+        showNotification('Click your pieces to pick them up', 'info');
     } else {
         btn.classList.remove('active');
         btn.textContent = '🔄 Pickup Mode: OFF';
@@ -457,9 +452,7 @@ function updateUI() {
                 <div class="score-details">
                     <span class="score-name">${score.player}${isDisconnected ? ' (DC)' : ''}</span>
                     <div class="score-breakdown-mini">
-                        Territory: ${breakdown.base_territory} | 
-                        Combos: ${breakdown.combos.total} | 
-                        Objectives: ${breakdown.objectives.total}
+                        T:${breakdown.base_territory} | C:${breakdown.combos.total} | O:${breakdown.objectives.total}
                     </div>
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: ${progressPercent}%; background-color: ${score.color}"></div>
@@ -488,7 +481,7 @@ function updateUI() {
         
         const isDisconnected = gameState.disconnected_players && gameState.disconnected_players.includes(idx);
         const missedTurns = gameState.missed_turns ? gameState.missed_turns[idx] || 0 : 0;
-        
+
         playerItem.innerHTML = `
             <div class="player-info-color" style="background-color: ${player.color}"></div>
             <span class="player-info-name">
@@ -507,6 +500,7 @@ function updateUI() {
         
         // Update energy display
         document.getElementById('energyDisplay').textContent = energy;
+        document.getElementById('energyGain').textContent = `+${gameState.energy_per_turn} per turn`;
         
         const inventoryDiv = document.getElementById('inventory');
         inventoryDiv.innerHTML = '';
@@ -554,6 +548,7 @@ function updateUI() {
         });
         
         updateObjectivesDisplay();
+        updateCombosDisplay();
     }
     
     updateSelectedPieceInfo();
@@ -588,6 +583,50 @@ function updateObjectivesDisplay() {
     });
 }
 
+function updateCombosDisplay() {
+    const combosDiv = document.getElementById('combosDisplay');
+    if (!combosDiv || myPlayerIndex === -1) return;
+    
+    const myScore = gameState.scores[myPlayerIndex];
+    const combos = myScore.breakdown.combos;
+    
+    combosDiv.innerHTML = '<h4>Combo Bonuses</h4>';
+    
+    // Mirror Chain combo
+    const mirrorCombo = document.createElement('div');
+    mirrorCombo.className = 'combo-item' + (combos.perfect_reflection > 0 ? ' active' : '');
+    mirrorCombo.innerHTML = `
+        <div class="combo-header">
+            <span class="combo-icon">${combos.perfect_reflection > 0 ? '✓' : '○'}</span>
+            <span class="combo-name">Perfect Reflection</span>
+            <span class="combo-points">+${combos.perfect_reflection}</span>
+        </div>
+        <div class="combo-description">Chain 3+ mirrors together</div>
+    `;
+    combosDiv.appendChild(mirrorCombo);
+    
+    // Prism Cascade combo
+    const prismCombo = document.createElement('div');
+    prismCombo.className = 'combo-item' + (combos.prism_cascade > 0 ? ' active' : '');
+    prismCombo.innerHTML = `
+        <div class="combo-header">
+            <span class="combo-icon">${combos.prism_cascade > 0 ? '✓' : '○'}</span>
+            <span class="combo-name">Prism Cascade</span>
+            <span class="combo-points">+${combos.prism_cascade}</span>
+        </div>
+        <div class="combo-description">Prism/splitter controlling 10+ cells nearby</div>
+    `;
+    combosDiv.appendChild(prismCombo);
+    
+    // Show details if any combos active
+    if (combos.details && combos.details.length > 0) {
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'combo-details';
+        detailsDiv.innerHTML = combos.details.map(detail => `<div class="combo-detail">• ${detail}</div>`).join('');
+        combosDiv.appendChild(detailsDiv);
+    }
+}
+
 function selectPiece(type, label, icon) {
     if (pickupMode) return;
     
@@ -603,17 +642,17 @@ function updateSelectedPieceInfo() {
     
     if (pickupMode) {
         selectedPieceName.textContent = 'Pickup Mode';
-        pieceDescription.textContent = `Click your own pieces to pick them up (costs ${gameState?.pickup_cost || 1} energy)`;
+        pieceDescription.textContent = `Click your own pieces to pick them up (costs ${gameState?.pickup_cost || 1} energy). Picking up doesn't end your turn.`;
         rotationControls.style.display = 'none';
         return;
     }
     
     if (selectedPiece) {
         const descriptions = {
-            'mirror': 'Reflects light beams at 90° angles. Rotate to change reflection direction.',
-            'prism': 'Splits light into three beams: straight, left, and right. Creates powerful area coverage. LIMITED: Only 1 per player!',
-            'blocker': 'Completely stops light beams. Cannot be placed near enemy light sources.',
-            'splitter': 'Splits light into two perpendicular beams. More focused than prisms.'
+            'mirror': 'Reflects light at 90°. Rotate to change direction. Placing ends your turn.',
+            'prism': 'Splits into 3 beams. Creates powerful area coverage. Only 1 per player! Placing ends your turn.',
+            'blocker': 'Completely stops light. Cannot be placed within 3 cells of light sources. Placing ends your turn.',
+            'splitter': 'Splits into 2 perpendicular beams. More focused than prisms. Placing ends your turn.'
         };
         
         const labels = {
@@ -634,7 +673,7 @@ function updateSelectedPieceInfo() {
         }
     } else {
         selectedPieceName.textContent = 'None';
-        pieceDescription.textContent = 'Select a piece from your inventory to place it on the board.';
+        pieceDescription.textContent = 'Select a piece from your inventory. Placing a piece ends your turn immediately. Save energy by passing to place expensive pieces later.';
         rotationControls.style.display = 'none';
     }
 }
@@ -687,17 +726,28 @@ function handleCanvasHover(e) {
     canvas.hoverY = gridY;
     
     if (gridX >= 0 && gridX < gameState.board_size && gridY >= 0 && gridY < gameState.board_size) {
-        if (gameState.board[gridY][gridX] === null && 
-            !gameState.protected_zones.some(([px, py]) => px === gridX && py === gridY)) {
+        if (gameState.board[gridY][gridX] === null) {
+            // Check if valid based on piece type
+            let isValid = true;
             
-            socket.emit('request_preview', {
-                game_id: gameId,
-                player_id: playerId,
-                x: gridX,
-                y: gridY,
-                piece_type: selectedPiece,
-                rotation: selectedRotation
-            });
+            if (selectedPiece === 'blocker') {
+                isValid = !gameState.blocker_exclusion_zones.some(([px, py]) => px === gridX && py === gridY);
+            } else {
+                isValid = !gameState.protected_zones.some(([px, py]) => px === gridX && py === gridY);
+            }
+            
+            if (isValid) {
+                socket.emit('request_preview', {
+                    game_id: gameId,
+                    player_id: playerId,
+                    x: gridX,
+                    y: gridY,
+                    piece_type: selectedPiece,
+                    rotation: selectedRotation
+                });
+            } else {
+                previewTerritory = null;
+            }
         } else {
             previewTerritory = null;
         }
@@ -744,7 +794,7 @@ function renderBoard() {
         drawTerritory(territoryToDraw, !!previewTerritory);
     }
     
-    // Draw amplifier tiles
+    // Draw amplifier tiles (3x multiplier)
     if (gameState.amplifier_tiles) {
         gameState.amplifier_tiles.forEach(([x, y]) => {
             ctx.fillStyle = 'rgba(255, 215, 0, 0.2)';
@@ -767,7 +817,7 @@ function renderBoard() {
             ctx.font = 'bold 12px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('2x', 
+            ctx.fillText('3x', 
                 boardOffsetX + (x + 0.5) * cellSize,
                 boardOffsetY + (y + 0.5) * cellSize
             );
@@ -777,7 +827,20 @@ function renderBoard() {
     // Draw protected zones
     if (gameState.protected_zones) {
         gameState.protected_zones.forEach(([x, y]) => {
-            ctx.fillStyle = 'rgba(255, 100, 100, 0.15)';
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.12)';
+            ctx.fillRect(
+                boardOffsetX + x * cellSize + 1,
+                boardOffsetY + y * cellSize + 1,
+                cellSize - 2,
+                cellSize - 2
+            );
+        });
+    }
+    
+    // Draw blocker exclusion zones (darker/more visible)
+    if (gameState.blocker_exclusion_zones && selectedPiece === 'blocker') {
+        gameState.blocker_exclusion_zones.forEach(([x, y]) => {
+            ctx.fillStyle = 'rgba(255, 50, 50, 0.25)';
             ctx.fillRect(
                 boardOffsetX + x * cellSize + 1,
                 boardOffsetY + y * cellSize + 1,
@@ -862,7 +925,6 @@ function drawLightBeam(segment) {
     
     const opacity = getBeamOpacity(segment.player);
     
-    // Draw beam line
     ctx.strokeStyle = segment.color + opacity;
     ctx.lineWidth = 3;
     ctx.beginPath();
@@ -870,9 +932,8 @@ function drawLightBeam(segment) {
     ctx.lineTo(x2, y2);
     ctx.stroke();
     
-    // Draw glow
     const glowOpacity = parseInt(opacity, 16) / 2;
-    ctx.strokeStyle = segment.color + glowOpacity.toString(16).padStart(2, '0');
+    ctx.strokeStyle = segment.color + Math.floor(glowOpacity).toString(16).padStart(2, '0');
     ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -921,6 +982,9 @@ function drawTerritory(territory, isPreview) {
         }
     }
 }
+
+// Remaining render functions (drawLightSources, drawPieces, drawPiece, drawHoverPreview, showGameOver)
+// are identical to v4.0, keeping them as-is for brevity
 
 function drawLightSources() {
     if (!gameState.light_sources) return;
@@ -1073,8 +1137,15 @@ function drawHoverPreview(x, y) {
         return;
     }
     
-    if (gameState.protected_zones && gameState.protected_zones.some(([px, py]) => px === x && py === y)) {
-        return;
+    // Check appropriate zone based on piece type
+    if (selectedPiece === 'blocker') {
+        if (gameState.blocker_exclusion_zones && gameState.blocker_exclusion_zones.some(([px, py]) => px === x && py === y)) {
+            return;
+        }
+    } else {
+        if (gameState.protected_zones && gameState.protected_zones.some(([px, py]) => px === x && py === y)) {
+            return;
+        }
     }
     
     const centerX = boardOffsetX + (x + 0.5) * cellSize;

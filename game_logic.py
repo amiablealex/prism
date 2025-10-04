@@ -8,32 +8,33 @@ class PrismWarsGame:
         self.game_id = game_id
         self.max_players = max_players
         self.players = []
-        self.state = 'waiting'  # waiting, playing, finished
-        self.board_size = 15  # Increased from 12
+        self.state = 'waiting'
+        self.board_size = 15
         self.board = []
         self.light_sources = []
         self.current_player = 0
         self.round_number = 1
-        self.max_rounds = 15  # Reduced from 20
+        self.max_rounds = 15
         self.winner = None
         
-        # Reduced piece counts with pickup/replace mechanic
+        # Reduced piece counts
         self.pieces_per_player = {
-            'mirror': 8,      # Reduced from 15
-            'prism': 1,       # Keep at 1
-            'blocker': 4,     # Reduced from 8
-            'splitter': 3     # Reduced from 6
+            'mirror': 8,
+            'prism': 1,
+            'blocker': 4,
+            'splitter': 3
         }
         
         self.player_inventory = []
         self.amplifier_tiles = []
         self.protected_zones = []
+        self.blocker_exclusion_zones = []  # Extra distance for blockers
         self.win_points = 75
         self.objectives = []
         self.completed_objectives = []
         
-        # Energy system
-        self.energy_per_turn = 10
+        # Energy system - accumulating, not resetting
+        self.energy_per_turn = 2  # Gain 2 per turn
         self.player_energy = []
         self.piece_costs = {
             'mirror': 2,
@@ -41,9 +42,9 @@ class PrismWarsGame:
             'prism': 8,
             'blocker': 3
         }
-        self.pickup_cost = 1  # Cost to remove a piece
+        self.pickup_cost = 1
         
-        # Turn timer system with disconnect detection
+        # Turn timer system
         self.turn_timer_seconds = 60
         self.turn_start_time = None
         self.missed_turns = {}
@@ -51,10 +52,9 @@ class PrismWarsGame:
         
         # Connection health
         self.last_heartbeat = {}
-        self.disconnect_grace_period = 30  # seconds
-        self.pending_disconnects = {}  # player_idx -> timestamp when disconnect detected
+        self.disconnect_grace_period = 30
+        self.pending_disconnects = {}
         
-        # Game creation time
         self.created_at = datetime.now()
         self.started_at = None
     
@@ -72,12 +72,13 @@ class PrismWarsGame:
                 'splitter': self.pieces_per_player['splitter']
             })
         
-        # Initialize energy
-        self.player_energy = [self.energy_per_turn for _ in self.players]
+        # Initialize energy - start with enough for first move
+        self.player_energy = [4 for _ in self.players]  # Start with 4 energy
         
         self._initialize_light_sources()
         self._generate_amplifier_tiles()
         self._create_protected_zones()
+        self._create_blocker_exclusion_zones()
         self._assign_objectives()
         
         self.completed_objectives = [set() for _ in self.players]
@@ -96,9 +97,7 @@ class PrismWarsGame:
         self.light_sources = []
         
         if len(self.players) == 2:
-            # Player 0: Top-left area
             positions_p0 = [(3, 0, 'down'), (0, 3, 'right')]
-            # Player 1: Bottom-right area
             positions_p1 = [(11, 14, 'up'), (14, 11, 'left')]
             
             for x, y, direction in positions_p0:
@@ -153,7 +152,7 @@ class PrismWarsGame:
                     })
     
     def _generate_amplifier_tiles(self):
-        """Generate 5 random amplifier tiles"""
+        """Generate 5 random amplifier tiles (3x multiplier)"""
         self.amplifier_tiles = []
         attempts = 0
         while len(self.amplifier_tiles) < 5 and attempts < 100:
@@ -164,7 +163,7 @@ class PrismWarsGame:
             attempts += 1
     
     def _create_protected_zones(self):
-        """Create 2-cell buffer zones around light sources"""
+        """Create 2-cell buffer zones around light sources (for all pieces except blockers)"""
         self.protected_zones = []
         
         for source in self.light_sources:
@@ -183,6 +182,27 @@ class PrismWarsGame:
                 py = entry_y + dy * dist
                 if 0 <= px < self.board_size and 0 <= py < self.board_size:
                     self.protected_zones.append((px, py))
+    
+    def _create_blocker_exclusion_zones(self):
+        """Create 3-cell buffer zones for blockers (1 extra cell)"""
+        self.blocker_exclusion_zones = []
+        
+        for source in self.light_sources:
+            if source['direction'] == 'down':
+                entry_x, entry_y = source['x'], 0
+            elif source['direction'] == 'up':
+                entry_x, entry_y = source['x'], self.board_size - 1
+            elif source['direction'] == 'right':
+                entry_x, entry_y = 0, source['y']
+            else:
+                entry_x, entry_y = self.board_size - 1, source['y']
+            
+            for dist in range(3):  # 3 cells instead of 2
+                dx, dy = self._get_direction_delta(source['direction'])
+                px = entry_x + dx * dist
+                py = entry_y + dy * dist
+                if 0 <= px < self.board_size and 0 <= py < self.board_size:
+                    self.blocker_exclusion_zones.append((px, py))
     
     def _assign_objectives(self):
         """Assign objectives to each player"""
@@ -203,7 +223,6 @@ class PrismWarsGame:
         """Update last heartbeat time for a player"""
         self.last_heartbeat[player_idx] = time.time()
         
-        # If player was pending disconnect, cancel it
         if player_idx in self.pending_disconnects:
             del self.pending_disconnects[player_idx]
     
@@ -217,27 +236,20 @@ class PrismWarsGame:
             
             time_since_heartbeat = current_time - self.last_heartbeat.get(player_idx, current_time)
             
-            if time_since_heartbeat > 15:  # No heartbeat for 15 seconds
+            if time_since_heartbeat > 15:
                 if player_idx not in self.pending_disconnects:
-                    # Mark as pending disconnect
                     self.pending_disconnects[player_idx] = current_time
                 elif current_time - self.pending_disconnects[player_idx] > self.disconnect_grace_period:
-                    # Grace period expired, start counting missed turns
-                    pass  # Will be handled by turn timeout
+                    pass
     
     def handle_reconnection(self, player_idx):
         """Handle player reconnection"""
-        # Reset missed turns
         self.missed_turns[player_idx] = 0
-        
-        # Remove from disconnected set
         self.disconnected_players.discard(player_idx)
         
-        # Remove from pending disconnects
         if player_idx in self.pending_disconnects:
             del self.pending_disconnects[player_idx]
         
-        # Update heartbeat
         self.last_heartbeat[player_idx] = time.time()
     
     def get_time_remaining(self):
@@ -261,14 +273,11 @@ class PrismWarsGame:
         """Handle a turn timeout - auto-pass and track missed turns"""
         current_player_idx = self.current_player
         
-        # Increment missed turns
         self.missed_turns[current_player_idx] = self.missed_turns.get(current_player_idx, 0) + 1
         
-        # Check if player should be removed (3 consecutive missed turns)
         if self.missed_turns[current_player_idx] >= 3:
             self.disconnected_players.add(current_player_idx)
             
-            # Check if game should end (only 1 player left)
             active_players = [i for i in range(len(self.players)) if i not in self.disconnected_players]
             if len(active_players) <= 1:
                 if active_players:
@@ -277,7 +286,6 @@ class PrismWarsGame:
                     self.force_end_game(None)
                 return True
         
-        # Auto-pass turn
         self.next_turn()
         return False
     
@@ -296,9 +304,9 @@ class PrismWarsGame:
         """Spend energy for a player"""
         self.player_energy[player_idx] = max(0, self.player_energy[player_idx] - amount)
     
-    def refill_energy(self, player_idx):
-        """Refill energy at start of turn"""
-        self.player_energy[player_idx] = self.energy_per_turn
+    def gain_energy(self, player_idx):
+        """Gain energy at start of turn"""
+        self.player_energy[player_idx] += self.energy_per_turn
     
     def pickup_piece(self, x, y, player_idx):
         """Pick up a piece from the board"""
@@ -328,11 +336,16 @@ class PrismWarsGame:
         return True, "Piece picked up"
     
     def place_piece(self, x, y, piece_type, rotation=0):
-        """Place a piece on the board"""
+        """Place a piece on the board - ends turn immediately"""
         if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
             return False, "Invalid coordinates"
         
-        if (x, y) in self.protected_zones:
+        # Check blocker-specific exclusion zone
+        if piece_type == 'blocker' and (x, y) in self.blocker_exclusion_zones:
+            return False, "Blockers cannot be placed within 3 cells of light sources"
+        
+        # Check regular protected zone for other pieces
+        if piece_type != 'blocker' and (x, y) in self.protected_zones:
             return False, "Cannot place in protected zone near light sources"
         
         if self.board[y][x] is not None:
@@ -346,7 +359,6 @@ class PrismWarsGame:
         if self.player_inventory[player_idx][piece_type] <= 0:
             return False, f"No {piece_type}s remaining in inventory"
         
-        # Check energy cost
         if not self.can_afford_action(player_idx, 'place', piece_type):
             cost = self.piece_costs[piece_type]
             return False, f"Not enough energy (need {cost}, have {self.player_energy[player_idx]})"
@@ -365,8 +377,11 @@ class PrismWarsGame:
         cost = self.piece_costs[piece_type]
         self.spend_energy(player_idx, cost)
         
-        # Reset missed turns on successful move
+        # Reset missed turns
         self.missed_turns[player_idx] = 0
+        
+        # End turn immediately after placement
+        self.next_turn()
         
         return True, "Piece placed successfully"
     
@@ -380,8 +395,8 @@ class PrismWarsGame:
             self.current_player = (self.current_player + 1) % len(self.players)
             attempts += 1
         
-        # Refill energy for new turn
-        self.refill_energy(self.current_player)
+        # Gain energy for new turn (accumulating system)
+        self.gain_energy(self.current_player)
         
         # Reset turn timer
         self.turn_start_time = time.time()
@@ -482,7 +497,6 @@ class PrismWarsGame:
                 y += dy
                 continue
             
-            # End current segment at piece
             if segment_start:
                 segments.append({
                     'x1': segment_start[0],
@@ -496,7 +510,6 @@ class PrismWarsGame:
             
             piece_type = piece['type']
             
-            # Blocker stops light completely (reverted from penetration)
             if piece_type == 'blocker':
                 break
             
@@ -590,7 +603,6 @@ class PrismWarsGame:
             
             piece_type = piece['type']
             
-            # Blocker stops light completely
             if piece_type == 'blocker':
                 break
             
@@ -699,6 +711,7 @@ class PrismWarsGame:
         territory = self.calculate_light_paths()
         base_scores = {i: 0 for i in range(len(self.players))}
         
+        # Amplifiers now count as 3x
         for y in range(self.board_size):
             for x in range(self.board_size):
                 controllers = territory[y][x]
@@ -707,7 +720,7 @@ class PrismWarsGame:
                     player = list(controllers)[0]
                     if player not in self.disconnected_players:
                         if (x, y) in self.amplifier_tiles:
-                            base_scores[player] += 2
+                            base_scores[player] += 3  # Changed from 2 to 3
                         else:
                             base_scores[player] += 1
         
@@ -924,7 +937,6 @@ class PrismWarsGame:
         self.state = 'finished'
         detailed_scores = self.calculate_detailed_scores()
         
-        # Filter out disconnected players
         active_scores = [(i, score) for i, score in enumerate(detailed_scores) if i not in self.disconnected_players]
         
         if not active_scores:
@@ -972,6 +984,7 @@ class PrismWarsGame:
             'player_energy': self.player_energy,
             'amplifier_tiles': self.amplifier_tiles,
             'protected_zones': self.protected_zones,
+            'blocker_exclusion_zones': self.blocker_exclusion_zones,
             'win_points': self.win_points,
             'objectives': self.objectives,
             'completed_objectives': [list(s) for s in self.completed_objectives],
@@ -998,9 +1011,10 @@ class PrismWarsGame:
         game.max_rounds = data['max_rounds']
         game.winner = data['winner']
         game.player_inventory = data['player_inventory']
-        game.player_energy = data.get('player_energy', [10] * len(data['players']))
+        game.player_energy = data.get('player_energy', [4] * len(data['players']))
         game.amplifier_tiles = [tuple(t) for t in data['amplifier_tiles']]
         game.protected_zones = [tuple(z) for z in data['protected_zones']]
+        game.blocker_exclusion_zones = [tuple(z) for z in data.get('blocker_exclusion_zones', [])]
         game.win_points = data['win_points']
         game.objectives = data['objectives']
         game.completed_objectives = [set(s) for s in data.get('completed_objectives', [[] for _ in data['players']])]
@@ -1041,6 +1055,7 @@ class PrismWarsGame:
             'scores': self.get_scores(),
             'amplifier_tiles': self.amplifier_tiles,
             'protected_zones': self.protected_zones,
+            'blocker_exclusion_zones': self.blocker_exclusion_zones,
             'win_points': self.win_points,
             'objectives': self.objectives,
             'light_beam_segments': self.get_light_beam_segments(),

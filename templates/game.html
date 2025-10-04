@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Playing - Prism Wars v4.0</title>
+    <title>Playing - Prism Wars v4.5</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/game.css') }}">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -13,7 +13,7 @@
         <!-- Header -->
         <div class="game-header">
             <div class="header-left">
-                <h1 class="game-title-small">◆ Prism Wars v4.0</h1>
+                <h1 class="game-title-small">◆ Prism Wars</h1>
                 <div class="round-counter">Round <span id="roundNumber">1</span>/<span id="maxRounds">15</span></div>
             </div>
             <div class="header-center">
@@ -28,13 +28,13 @@
             </div>
             <div class="header-right">
                 <div class="connection-status connected" id="connectionStatus">● Connected</div>
-                <button class="btn btn-small" onclick="window.location.href='/'">Leave Game</button>
+                <button class="btn btn-small" onclick="window.location.href='/'">Leave</button>
             </div>
         </div>
 
         <!-- Main Game Area -->
         <div class="game-main">
-            <!-- Left Sidebar - Player Info & Scores -->
+            <!-- Left Sidebar -->
             <div class="sidebar sidebar-left">
                 <div class="scores-panel">
                     <h3>Scores</h3>
@@ -52,8 +52,15 @@
                 <canvas id="gameCanvas"></canvas>
             </div>
 
-            <!-- Right Sidebar - Inventory & Actions -->
+            <!-- Right Sidebar - ACTIONS FIRST -->
             <div class="sidebar sidebar-right">
+                <!-- Actions Panel - Now First -->
+                <div class="actions-panel">
+                    <button id="togglePickupMode" class="btn-action">🔄 Pickup Mode: OFF</button>
+                    <button id="passTurnBtn" class="btn-action">⏭️ Pass Turn</button>
+                </div>
+
+                <!-- Inventory Panel -->
                 <div class="inventory-panel">
                     <h3>Your Pieces</h3>
                     
@@ -61,8 +68,9 @@
                         <div class="energy-label">Energy Available</div>
                         <div class="energy-value">
                             <span class="energy-icon">⚡</span>
-                            <span id="energyDisplay">10</span>
+                            <span id="energyDisplay">4</span>
                         </div>
+                        <div class="energy-gain" id="energyGain">+2 per turn</div>
                     </div>
                     
                     <div id="inventory"></div>
@@ -78,52 +86,55 @@
                     </div>
                 </div>
 
+                <!-- Objectives Panel -->
                 <div class="objectives-panel">
                     <div id="objectivesDisplay"></div>
                 </div>
 
+                <!-- Combos Panel - NEW -->
+                <div class="combos-panel">
+                    <div id="combosDisplay"></div>
+                </div>
+
+                <!-- Visual Controls -->
                 <div class="visual-controls-panel">
-                    <h4>👁️ Visual Controls</h4>
+                    <h4>👁️ View</h4>
                     <div class="visual-controls-grid">
-                        <button id="toggleBeams" class="visual-control-btn active">☑ Show Light Beams</button>
-                        <button id="toggleParticles" class="visual-control-btn active">☑ Show Particles</button>
-                        <button id="toggleTerritory" class="visual-control-btn active">☑ Show Territory</button>
-                        <button id="toggleOtherPlayers" class="visual-control-btn active">☑ Show Other Players</button>
-                        <button id="highlightMyLightBtn" class="visual-control-btn">💡 Highlight My Light</button>
-                        <button id="showActivePlayerBtn" class="visual-control-btn">🎯 Show Active Player</button>
+                        <button id="toggleBeams" class="visual-control-btn active">☑ Beams</button>
+                        <button id="toggleParticles" class="visual-control-btn active">☑ Particles</button>
+                        <button id="toggleTerritory" class="visual-control-btn active">☑ Territory</button>
+                        <button id="toggleOtherPlayers" class="visual-control-btn active">☑ Others</button>
+                        <button id="highlightMyLightBtn" class="visual-control-btn">💡 My Light</button>
+                        <button id="showActivePlayerBtn" class="visual-control-btn">🎯 Active</button>
                     </div>
                 </div>
 
-                <div class="actions-panel">
-                    <button id="togglePickupMode" class="btn-action">🔄 Pickup Mode: OFF</button>
-                    <button id="passTurnBtn" class="btn-action">⏭️ Pass Turn</button>
-                </div>
-
+                <!-- Legend -->
                 <div class="legend-panel">
                     <h4>Legend</h4>
                     <div class="legend-item">
                         <span class="legend-icon">🪞</span>
-                        <span>Mirror (⚡2) - Reflects 90°</span>
+                        <span>Mirror (⚡2)</span>
                     </div>
                     <div class="legend-item">
                         <span class="legend-icon">✂️</span>
-                        <span>Splitter (⚡4) - 2 beams</span>
+                        <span>Splitter (⚡4)</span>
                     </div>
                     <div class="legend-item">
                         <span class="legend-icon">◆</span>
-                        <span>Prism (⚡8) - 3 beams (1 only)</span>
+                        <span>Prism (⚡8)</span>
                     </div>
                     <div class="legend-item">
                         <span class="legend-icon">⬛</span>
-                        <span>Blocker (⚡3) - Stops light</span>
+                        <span>Blocker (⚡3)</span>
                     </div>
                     <div class="legend-item">
                         <span class="legend-icon">🔄</span>
-                        <span>Pickup (⚡1) - Reuse pieces</span>
+                        <span>Pickup (⚡1)</span>
                     </div>
                     <div class="legend-item">
                         <span class="legend-icon">🌟</span>
-                        <span>Gold squares - 2x points</span>
+                        <span>Amplifiers - 3x pts</span>
                     </div>
                 </div>
             </div>
