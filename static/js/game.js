@@ -12,16 +12,67 @@ let lightParticles = [];
 let animationFrame = null;
 let timeRemaining = 60;
 let timerInterval = null;
+let heartbeatInterval = null;
+let connectionStatus = 'connected';
+
+// Visual control states
+let showBeams = true;
+let showParticles = true;
+let showTerritory = true;
+let showOtherPlayers = true;
+let highlightMyLight = false;
+let showOnlyActivePlayer = false;
+let pickupMode = false;
+
+// Session persistence
+function saveSession(gameId, playerId, playerName) {
+    const session = {
+        gameId: gameId,
+        playerId: playerId,
+        playerName: playerName,
+        lastActive: Date.now()
+    };
+    localStorage.setItem('prismwars_session', JSON.stringify(session));
+}
+
+function getSession() {
+    const stored = localStorage.getItem('prismwars_session');
+    if (!stored) return null;
+    
+    const session = JSON.parse(stored);
+    const hoursSinceActive = (Date.now() - session.lastActive) / (1000 * 60 * 60);
+    
+    // Session expires after 6 hours
+    if (hoursSinceActive > 6) {
+        clearSession();
+        return null;
+    }
+    
+    return session;
+}
+
+function clearSession() {
+    localStorage.removeItem('prismwars_session');
+}
+
+function updateSessionActivity() {
+    const session = getSession();
+    if (session) {
+        session.lastActive = Date.now();
+        localStorage.setItem('prismwars_session', JSON.stringify(session));
+    }
+}
 
 // Light beam animation
 class LightParticle {
-    constructor(x1, y1, x2, y2, color) {
+    constructor(x1, y1, x2, y2, color, player) {
         this.x1 = x1;
         this.y1 = y1;
         this.x2 = x2;
         this.y2 = y2;
         this.color = color;
-        this.progress = Math.random(); // Random start position
+        this.player = player;
+        this.progress = Math.random();
         this.speed = 0.02 + Math.random() * 0.01;
     }
     
@@ -53,14 +104,41 @@ function initGame(gameId, playerId) {
     window.gameId = gameId;
     window.playerId = playerId;
     
+    // Save session
+    saveSession(gameId, playerId, 'Player');
+    
     socket = io();
     
     socket.on('connect', () => {
         console.log('Connected to server');
+        connectionStatus = 'connected';
+        updateConnectionStatus();
+        
         socket.emit('join_game_room', {
             game_id: gameId,
             player_id: playerId
         });
+        
+        // Start heartbeat
+        startHeartbeat();
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        connectionStatus = 'disconnected';
+        updateConnectionStatus();
+        
+        // Attempt reconnection
+        setTimeout(() => {
+            if (connectionStatus === 'disconnected') {
+                socket.connect();
+            }
+        }, 2000);
+    });
+    
+    socket.on('connect_error', () => {
+        connectionStatus = 'error';
+        updateConnectionStatus();
     });
     
     socket.on('game_state_update', (state) => {
@@ -73,10 +151,8 @@ function initGame(gameId, playerId) {
             }
         }
         
-        // Update light particles from beam segments
         updateLightParticles();
         
-        // Update timer
         if (state.time_remaining !== undefined) {
             timeRemaining = state.time_remaining;
             updateTimerDisplay();
@@ -84,6 +160,7 @@ function initGame(gameId, playerId) {
         
         updateUI();
         renderBoard();
+        updateSessionActivity();
     });
     
     socket.on('preview_update', (data) => {
@@ -98,11 +175,15 @@ function initGame(gameId, playerId) {
         if (timerInterval) {
             clearInterval(timerInterval);
         }
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+        }
+        clearSession();
         showGameOver(data);
     });
     
     socket.on('error', (data) => {
-        alert(data.message);
+        showNotification(data.message, 'error');
     });
     
     canvas = document.getElementById('gameCanvas');
@@ -115,6 +196,7 @@ function initGame(gameId, playerId) {
         renderBoard();
     });
     
+    // Event listeners for controls
     document.getElementById('passTurnBtn').addEventListener('click', () => {
         socket.emit('pass_turn', {
             game_id: gameId,
@@ -122,13 +204,19 @@ function initGame(gameId, playerId) {
         });
     });
     
+    document.getElementById('togglePickupMode').addEventListener('click', togglePickupMode);
+    document.getElementById('toggleBeams').addEventListener('click', () => toggleVisual('beams'));
+    document.getElementById('toggleParticles').addEventListener('click', () => toggleVisual('particles'));
+    document.getElementById('toggleTerritory').addEventListener('click', () => toggleVisual('territory'));
+    document.getElementById('toggleOtherPlayers').addEventListener('click', () => toggleVisual('others'));
+    document.getElementById('highlightMyLightBtn').addEventListener('click', toggleHighlightMyLight);
+    document.getElementById('showActivePlayerBtn').addEventListener('click', toggleShowActivePlayer);
+    
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
     
-    // Start animation loop
     animate();
     
-    // Start timer update interval
     timerInterval = setInterval(() => {
         if (gameState && gameState.state === 'playing') {
             timeRemaining = Math.max(0, timeRemaining - 1);
@@ -137,15 +225,137 @@ function initGame(gameId, playerId) {
     }, 1000);
 }
 
+function startHeartbeat() {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+    }
+    
+    heartbeatInterval = setInterval(() => {
+        if (socket && socket.connected && window.gameId && window.playerId) {
+            socket.emit('heartbeat', {
+                game_id: window.gameId,
+                player_id: window.playerId
+            });
+        }
+    }, 10000); // Every 10 seconds
+}
+
+function updateConnectionStatus() {
+    const indicator = document.getElementById('connectionStatus');
+    if (!indicator) return;
+    
+    indicator.className = 'connection-status';
+    
+    if (connectionStatus === 'connected') {
+        indicator.classList.add('connected');
+        indicator.textContent = '● Connected';
+    } else if (connectionStatus === 'disconnected') {
+        indicator.classList.add('disconnected');
+        indicator.textContent = '● Reconnecting...';
+    } else {
+        indicator.classList.add('error');
+        indicator.textContent = '● Connection Error';
+    }
+}
+
+function togglePickupMode() {
+    pickupMode = !pickupMode;
+    const btn = document.getElementById('togglePickupMode');
+    
+    if (pickupMode) {
+        btn.classList.add('active');
+        btn.textContent = '🔄 Pickup Mode: ON';
+        selectedPiece = null;
+        showNotification('Click your own pieces to pick them up', 'info');
+    } else {
+        btn.classList.remove('active');
+        btn.textContent = '🔄 Pickup Mode: OFF';
+    }
+    
+    updateUI();
+}
+
+function toggleVisual(type) {
+    switch(type) {
+        case 'beams':
+            showBeams = !showBeams;
+            document.getElementById('toggleBeams').classList.toggle('active');
+            break;
+        case 'particles':
+            showParticles = !showParticles;
+            document.getElementById('toggleParticles').classList.toggle('active');
+            break;
+        case 'territory':
+            showTerritory = !showTerritory;
+            document.getElementById('toggleTerritory').classList.toggle('active');
+            break;
+        case 'others':
+            showOtherPlayers = !showOtherPlayers;
+            document.getElementById('toggleOtherPlayers').classList.toggle('active');
+            break;
+    }
+    renderBoard();
+}
+
+function toggleHighlightMyLight() {
+    highlightMyLight = !highlightMyLight;
+    showOnlyActivePlayer = false;
+    
+    const btn = document.getElementById('highlightMyLightBtn');
+    const activeBtn = document.getElementById('showActivePlayerBtn');
+    
+    if (highlightMyLight) {
+        btn.classList.add('active');
+        activeBtn.classList.remove('active');
+    } else {
+        btn.classList.remove('active');
+    }
+    
+    renderBoard();
+}
+
+function toggleShowActivePlayer() {
+    showOnlyActivePlayer = !showOnlyActivePlayer;
+    highlightMyLight = false;
+    
+    const btn = document.getElementById('showActivePlayerBtn');
+    const myLightBtn = document.getElementById('highlightMyLightBtn');
+    
+    if (showOnlyActivePlayer) {
+        btn.classList.add('active');
+        myLightBtn.classList.remove('active');
+    } else {
+        btn.classList.remove('active');
+    }
+    
+    renderBoard();
+}
+
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+    
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => {
+            notification.remove();
+        }, 300);
+    }, 3000);
+}
+
 function updateLightParticles() {
     if (!gameState || !gameState.light_beam_segments) return;
     
-    // Clear old particles
     lightParticles = [];
     
-    // Create particles for each beam segment
     gameState.light_beam_segments.forEach(segment => {
-        // Create 3-5 particles per segment
         const numParticles = 3 + Math.floor(Math.random() * 3);
         for (let i = 0; i < numParticles; i++) {
             lightParticles.push(new LightParticle(
@@ -153,20 +363,20 @@ function updateLightParticles() {
                 segment.y1,
                 segment.x2,
                 segment.y2,
-                segment.color
+                segment.color,
+                segment.player
             ));
         }
     });
 }
 
 function animate() {
-    // Update particles
-    lightParticles.forEach(particle => particle.update());
+    if (showParticles) {
+        lightParticles.forEach(particle => particle.update());
+    }
     
-    // Render
     renderBoard();
     
-    // Continue animation
     animationFrame = requestAnimationFrame(animate);
 }
 
@@ -178,10 +388,9 @@ function updateTimerDisplay() {
     const seconds = timeRemaining % 60;
     timerElement.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
     
-    // Warning colors
     if (timeRemaining <= 15) {
         timerElement.style.color = '#FF6B6B';
-        timerElement.style.animation = 'pulse 1s infinite';
+        timerElement.style.animation = 'pulse-timer 1s infinite';
     } else if (timeRemaining <= 30) {
         timerElement.style.color = '#FFD93D';
         timerElement.style.animation = 'none';
@@ -198,7 +407,7 @@ function resizeCanvas() {
     
     if (gameState) {
         const boardSize = gameState.board_size;
-        cellSize = Math.min(containerWidth / (boardSize + 2), containerHeight / (boardSize + 2), 60);
+        cellSize = Math.min(containerWidth / (boardSize + 2), containerHeight / (boardSize + 2), 50);
         
         canvas.width = cellSize * (boardSize + 2);
         canvas.height = cellSize * (boardSize + 2);
@@ -223,7 +432,7 @@ function updateUI() {
     turnIndicator.style.backgroundColor = currentPlayer.color;
     turnText.textContent = `${currentPlayer.username}'s Turn`;
     
-    // Update scores with breakdown
+    // Update scores
     const scoresList = document.getElementById('scoresList');
     scoresList.innerHTML = '';
     
@@ -234,7 +443,6 @@ function updateUI() {
             scoreItem.classList.add('current-player');
         }
         
-        // Check if player is disconnected
         const isDisconnected = gameState.disconnected_players && gameState.disconnected_players.includes(idx);
         if (isDisconnected) {
             scoreItem.classList.add('disconnected');
@@ -292,43 +500,53 @@ function updateUI() {
         playersInfo.appendChild(playerItem);
     });
     
-    // Update inventory
+    // Update inventory and energy
     if (myPlayerIndex !== -1) {
         const inventory = gameState.player_inventory[myPlayerIndex];
+        const energy = gameState.player_energy[myPlayerIndex];
+        
+        // Update energy display
+        document.getElementById('energyDisplay').textContent = energy;
+        
         const inventoryDiv = document.getElementById('inventory');
         inventoryDiv.innerHTML = '';
         
         const pieces = [
-            { type: 'mirror', icon: '🪞', label: 'Mirror' },
-            { type: 'splitter', icon: '✂️', label: 'Splitter' },
-            { type: 'prism', icon: '◆', label: 'Prism' },
-            { type: 'blocker', icon: '⬛', label: 'Blocker' }
+            { type: 'mirror', icon: '🪞', label: 'Mirror', cost: gameState.piece_costs.mirror },
+            { type: 'splitter', icon: '✂️', label: 'Splitter', cost: gameState.piece_costs.splitter },
+            { type: 'prism', icon: '◆', label: 'Prism', cost: gameState.piece_costs.prism },
+            { type: 'blocker', icon: '⬛', label: 'Blocker', cost: gameState.piece_costs.blocker }
         ];
         
         inventoryDiv.className = 'inventory-grid';
         
         pieces.forEach(piece => {
             const count = inventory[piece.type];
+            const canAfford = energy >= piece.cost;
+            
             const item = document.createElement('div');
             item.className = 'inventory-item';
             
-            if (count === 0) {
+            if (count === 0 || !canAfford || pickupMode) {
                 item.classList.add('disabled');
             }
             
-            if (selectedPiece === piece.type) {
+            if (selectedPiece === piece.type && !pickupMode) {
                 item.classList.add('selected');
             }
             
             item.innerHTML = `
                 <div class="inventory-item-left">
                     <span class="inventory-icon">${piece.icon}</span>
-                    <span class="inventory-label">${piece.label}</span>
+                    <div class="inventory-details">
+                        <span class="inventory-label">${piece.label}</span>
+                        <span class="inventory-cost">⚡${piece.cost}</span>
+                    </div>
                 </div>
                 <span class="inventory-count">${count}</span>
             `;
             
-            if (count > 0) {
+            if (count > 0 && canAfford && !pickupMode) {
                 item.addEventListener('click', () => selectPiece(piece.type, piece.label, piece.icon));
             }
             
@@ -371,6 +589,8 @@ function updateObjectivesDisplay() {
 }
 
 function selectPiece(type, label, icon) {
+    if (pickupMode) return;
+    
     selectedPiece = type;
     selectedRotation = 0;
     updateUI();
@@ -381,11 +601,18 @@ function updateSelectedPieceInfo() {
     const pieceDescription = document.getElementById('pieceDescription');
     const rotationControls = document.getElementById('rotationControls');
     
+    if (pickupMode) {
+        selectedPieceName.textContent = 'Pickup Mode';
+        pieceDescription.textContent = `Click your own pieces to pick them up (costs ${gameState?.pickup_cost || 1} energy)`;
+        rotationControls.style.display = 'none';
+        return;
+    }
+    
     if (selectedPiece) {
         const descriptions = {
             'mirror': 'Reflects light beams at 90° angles. Rotate to change reflection direction.',
             'prism': 'Splits light into three beams: straight, left, and right. Creates powerful area coverage. LIMITED: Only 1 per player!',
-            'blocker': 'Stops light beams (penetrates first blocker only). Cannot be placed near enemy light sources.',
+            'blocker': 'Completely stops light beams. Cannot be placed near enemy light sources.',
             'splitter': 'Splits light into two perpendicular beams. More focused than prisms.'
         };
         
@@ -418,7 +645,7 @@ function rotatePiece(degrees) {
 }
 
 function handleCanvasClick(e) {
-    if (!gameState || gameState.current_player !== myPlayerIndex || !selectedPiece) {
+    if (!gameState || gameState.current_player !== myPlayerIndex) {
         return;
     }
     
@@ -430,12 +657,21 @@ function handleCanvasClick(e) {
     const gridY = Math.floor((y - boardOffsetY) / cellSize);
     
     if (gridX >= 0 && gridX < gameState.board_size && gridY >= 0 && gridY < gameState.board_size) {
-        placePiece(gridX, gridY);
+        if (pickupMode) {
+            pickupPiece(gridX, gridY);
+        } else if (selectedPiece) {
+            placePiece(gridX, gridY);
+        }
     }
 }
 
 function handleCanvasHover(e) {
-    if (!gameState || gameState.current_player !== myPlayerIndex || !selectedPiece) {
+    if (!gameState || gameState.current_player !== myPlayerIndex || pickupMode) {
+        previewTerritory = null;
+        return;
+    }
+    
+    if (!selectedPiece) {
         previewTerritory = null;
         return;
     }
@@ -450,7 +686,6 @@ function handleCanvasHover(e) {
     canvas.hoverX = gridX;
     canvas.hoverY = gridY;
     
-    // Request preview from server
     if (gridX >= 0 && gridX < gameState.board_size && gridY >= 0 && gridY < gameState.board_size) {
         if (gameState.board[gridY][gridX] === null && 
             !gameState.protected_zones.some(([px, py]) => px === gridX && py === gridY)) {
@@ -469,6 +704,15 @@ function handleCanvasHover(e) {
     } else {
         previewTerritory = null;
     }
+}
+
+function pickupPiece(x, y) {
+    socket.emit('pickup_piece', {
+        game_id: gameId,
+        player_id: playerId,
+        x: x,
+        y: y
+    });
 }
 
 function placePiece(x, y) {
@@ -494,9 +738,11 @@ function renderBoard() {
     ctx.fillStyle = '#0f1419';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw territory (current or preview)
-    const territoryToDraw = previewTerritory || gameState.territory;
-    drawTerritory(territoryToDraw, !!previewTerritory);
+    // Draw territory
+    if (showTerritory) {
+        const territoryToDraw = previewTerritory || gameState.territory;
+        drawTerritory(territoryToDraw, !!previewTerritory);
+    }
     
     // Draw amplifier tiles
     if (gameState.amplifier_tiles) {
@@ -542,16 +788,22 @@ function renderBoard() {
     }
     
     // Draw light beam segments
-    if (gameState.light_beam_segments) {
+    if (showBeams && gameState.light_beam_segments) {
         gameState.light_beam_segments.forEach(segment => {
-            drawLightBeam(segment);
+            if (shouldDrawBeam(segment.player)) {
+                drawLightBeam(segment);
+            }
         });
     }
     
     // Draw animated light particles
-    lightParticles.forEach(particle => {
-        particle.draw(ctx, boardOffsetX, boardOffsetY, cellSize);
-    });
+    if (showParticles) {
+        lightParticles.forEach(particle => {
+            if (shouldDrawBeam(particle.player)) {
+                particle.draw(ctx, boardOffsetX, boardOffsetY, cellSize);
+            }
+        });
+    }
     
     // Draw grid
     ctx.strokeStyle = '#2a2a4e';
@@ -573,9 +825,33 @@ function renderBoard() {
     drawPieces();
     
     if (canvas.hoverX !== undefined && canvas.hoverY !== undefined && 
-        gameState.current_player === myPlayerIndex && selectedPiece) {
+        gameState.current_player === myPlayerIndex && selectedPiece && !pickupMode) {
         drawHoverPreview(canvas.hoverX, canvas.hoverY);
     }
+}
+
+function shouldDrawBeam(playerIdx) {
+    if (!showOtherPlayers && playerIdx !== myPlayerIndex) {
+        return false;
+    }
+    
+    if (showOnlyActivePlayer) {
+        return playerIdx === gameState.current_player;
+    }
+    
+    return true;
+}
+
+function getBeamOpacity(playerIdx) {
+    if (highlightMyLight) {
+        return playerIdx === myPlayerIndex ? '60' : '20';
+    }
+    
+    if (showOnlyActivePlayer) {
+        return playerIdx === gameState.current_player ? '60' : '15';
+    }
+    
+    return '40';
 }
 
 function drawLightBeam(segment) {
@@ -584,8 +860,10 @@ function drawLightBeam(segment) {
     const x2 = boardOffsetX + (segment.x2 + 0.5) * cellSize;
     const y2 = boardOffsetY + (segment.y2 + 0.5) * cellSize;
     
+    const opacity = getBeamOpacity(segment.player);
+    
     // Draw beam line
-    ctx.strokeStyle = segment.color + '40';
+    ctx.strokeStyle = segment.color + opacity;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -593,7 +871,8 @@ function drawLightBeam(segment) {
     ctx.stroke();
     
     // Draw glow
-    ctx.strokeStyle = segment.color + '20';
+    const glowOpacity = parseInt(opacity, 16) / 2;
+    ctx.strokeStyle = segment.color + glowOpacity.toString(16).padStart(2, '0');
     ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -613,6 +892,11 @@ function drawTerritory(territory, isPreview) {
             
             if (controllers.length === 1) {
                 const playerIdx = controllers[0];
+                
+                if (!showOtherPlayers && playerIdx !== myPlayerIndex) {
+                    continue;
+                }
+                
                 const color = gameState.players[playerIdx].color;
                 
                 ctx.fillStyle = color + alpha;
@@ -623,7 +907,6 @@ function drawTerritory(territory, isPreview) {
                     cellSize - 2
                 );
                 
-                // Add pulsing effect for preview
                 if (isPreview) {
                     ctx.strokeStyle = color + '60';
                     ctx.lineWidth = 2;
@@ -643,8 +926,11 @@ function drawLightSources() {
     if (!gameState.light_sources) return;
     
     gameState.light_sources.forEach(source => {
-        // Skip disconnected players
         if (gameState.disconnected_players && gameState.disconnected_players.includes(source.player)) {
+            return;
+        }
+        
+        if (!showOtherPlayers && source.player !== myPlayerIndex) {
             return;
         }
         
@@ -709,6 +995,9 @@ function drawPieces() {
         for (let x = 0; x < boardSize; x++) {
             const piece = gameState.board[y][x];
             if (piece) {
+                if (!showOtherPlayers && piece.player !== myPlayerIndex) {
+                    continue;
+                }
                 drawPiece(x, y, piece);
             }
         }
@@ -890,3 +1179,8 @@ function showGameOver(data) {
     
     modal.classList.add('show');
 }
+
+// Check for session on page load
+window.addEventListener('DOMContentLoaded', () => {
+    // This is handled by the HTML template
+});

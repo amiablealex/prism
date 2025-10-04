@@ -1,6 +1,7 @@
 from datetime import datetime
 import random
 import time
+import json
 
 class PrismWarsGame:
     def __init__(self, game_id, max_players=2):
@@ -8,19 +9,22 @@ class PrismWarsGame:
         self.max_players = max_players
         self.players = []
         self.state = 'waiting'  # waiting, playing, finished
-        self.board_size = 12
+        self.board_size = 15  # Increased from 12
         self.board = []
         self.light_sources = []
         self.current_player = 0
         self.round_number = 1
-        self.max_rounds = 20
+        self.max_rounds = 15  # Reduced from 20
         self.winner = None
+        
+        # Reduced piece counts with pickup/replace mechanic
         self.pieces_per_player = {
-            'mirror': 15,
-            'prism': 1,
-            'blocker': 8,
-            'splitter': 6
+            'mirror': 8,      # Reduced from 15
+            'prism': 1,       # Keep at 1
+            'blocker': 4,     # Reduced from 8
+            'splitter': 3     # Reduced from 6
         }
+        
         self.player_inventory = []
         self.amplifier_tiles = []
         self.protected_zones = []
@@ -28,16 +32,37 @@ class PrismWarsGame:
         self.objectives = []
         self.completed_objectives = []
         
-        # Turn timer system
+        # Energy system
+        self.energy_per_turn = 10
+        self.player_energy = []
+        self.piece_costs = {
+            'mirror': 2,
+            'splitter': 4,
+            'prism': 8,
+            'blocker': 3
+        }
+        self.pickup_cost = 1  # Cost to remove a piece
+        
+        # Turn timer system with disconnect detection
         self.turn_timer_seconds = 60
         self.turn_start_time = None
-        self.missed_turns = {}  # Track consecutive missed turns per player
-        self.disconnected_players = set()  # Players removed due to inactivity
+        self.missed_turns = {}
+        self.disconnected_players = set()
         
+        # Connection health
+        self.last_heartbeat = {}
+        self.disconnect_grace_period = 30  # seconds
+        self.pending_disconnects = {}  # player_idx -> timestamp when disconnect detected
+        
+        # Game creation time
+        self.created_at = datetime.now()
+        self.started_at = None
+    
     def initialize_board(self):
         """Initialize the game board and light sources"""
         self.board = [[None for _ in range(self.board_size)] for _ in range(self.board_size)]
         
+        # Initialize inventory
         self.player_inventory = []
         for _ in self.players:
             self.player_inventory.append({
@@ -47,6 +72,9 @@ class PrismWarsGame:
                 'splitter': self.pieces_per_player['splitter']
             })
         
+        # Initialize energy
+        self.player_energy = [self.energy_per_turn for _ in self.players]
+        
         self._initialize_light_sources()
         self._generate_amplifier_tiles()
         self._create_protected_zones()
@@ -54,18 +82,24 @@ class PrismWarsGame:
         
         self.completed_objectives = [set() for _ in self.players]
         
-        # Initialize turn timer
+        # Initialize turn timer and connection tracking
         self.turn_start_time = time.time()
         self.missed_turns = {i: 0 for i in range(len(self.players))}
         self.disconnected_players = set()
+        self.last_heartbeat = {i: time.time() for i in range(len(self.players))}
+        self.pending_disconnects = {}
+        
+        self.started_at = datetime.now()
     
     def _initialize_light_sources(self):
-        """Place light sources with better distribution"""
+        """Place light sources - 2 per player"""
         self.light_sources = []
         
         if len(self.players) == 2:
-            positions_p0 = [(2, 0, 'down'), (0, 2, 'right'), (3, 0, 'down')]
-            positions_p1 = [(9, 11, 'up'), (11, 9, 'left'), (8, 11, 'up')]
+            # Player 0: Top-left area
+            positions_p0 = [(3, 0, 'down'), (0, 3, 'right')]
+            # Player 1: Bottom-right area
+            positions_p1 = [(11, 14, 'up'), (14, 11, 'left')]
             
             for x, y, direction in positions_p0:
                 self.light_sources.append({
@@ -87,9 +121,9 @@ class PrismWarsGame:
         
         elif len(self.players) == 3:
             all_positions = [
-                [(2, 0, 'down'), (0, 3, 'right'), (4, 0, 'down')],
-                [(11, 5, 'left'), (8, 11, 'up'), (11, 7, 'left')],
-                [(0, 8, 'right'), (3, 11, 'up'), (0, 10, 'right')]
+                [(3, 0, 'down'), (0, 4, 'right')],
+                [(14, 6, 'left'), (10, 14, 'up')],
+                [(0, 10, 'right'), (4, 14, 'up')]
             ]
             for i in range(3):
                 for x, y, direction in all_positions[i]:
@@ -103,10 +137,10 @@ class PrismWarsGame:
         
         elif len(self.players) == 4:
             all_positions = [
-                [(2, 0, 'down'), (0, 2, 'right'), (3, 0, 'down')],
-                [(9, 0, 'down'), (11, 2, 'left'), (10, 0, 'down')],
-                [(2, 11, 'up'), (0, 9, 'right'), (3, 11, 'up')],
-                [(9, 11, 'up'), (11, 9, 'left'), (10, 11, 'up')]
+                [(3, 0, 'down'), (0, 3, 'right')],
+                [(11, 0, 'down'), (14, 3, 'left')],
+                [(3, 14, 'up'), (0, 11, 'right')],
+                [(11, 14, 'up'), (14, 11, 'left')]
             ]
             for i in range(4):
                 for x, y, direction in all_positions[i]:
@@ -123,8 +157,8 @@ class PrismWarsGame:
         self.amplifier_tiles = []
         attempts = 0
         while len(self.amplifier_tiles) < 5 and attempts < 100:
-            x = random.randint(3, self.board_size - 4)
-            y = random.randint(3, self.board_size - 4)
+            x = random.randint(4, self.board_size - 5)
+            y = random.randint(4, self.board_size - 5)
             if (x, y) not in self.amplifier_tiles:
                 self.amplifier_tiles.append((x, y))
             attempts += 1
@@ -164,6 +198,47 @@ class PrismWarsGame:
         for _ in self.players:
             player_objectives = random.sample(all_objectives, 2)
             self.objectives.append(player_objectives)
+    
+    def update_heartbeat(self, player_idx):
+        """Update last heartbeat time for a player"""
+        self.last_heartbeat[player_idx] = time.time()
+        
+        # If player was pending disconnect, cancel it
+        if player_idx in self.pending_disconnects:
+            del self.pending_disconnects[player_idx]
+    
+    def check_disconnections(self):
+        """Check for players who haven't sent heartbeat"""
+        current_time = time.time()
+        
+        for player_idx in range(len(self.players)):
+            if player_idx in self.disconnected_players:
+                continue
+            
+            time_since_heartbeat = current_time - self.last_heartbeat.get(player_idx, current_time)
+            
+            if time_since_heartbeat > 15:  # No heartbeat for 15 seconds
+                if player_idx not in self.pending_disconnects:
+                    # Mark as pending disconnect
+                    self.pending_disconnects[player_idx] = current_time
+                elif current_time - self.pending_disconnects[player_idx] > self.disconnect_grace_period:
+                    # Grace period expired, start counting missed turns
+                    pass  # Will be handled by turn timeout
+    
+    def handle_reconnection(self, player_idx):
+        """Handle player reconnection"""
+        # Reset missed turns
+        self.missed_turns[player_idx] = 0
+        
+        # Remove from disconnected set
+        self.disconnected_players.discard(player_idx)
+        
+        # Remove from pending disconnects
+        if player_idx in self.pending_disconnects:
+            del self.pending_disconnects[player_idx]
+        
+        # Update heartbeat
+        self.last_heartbeat[player_idx] = time.time()
     
     def get_time_remaining(self):
         """Get remaining time for current turn"""
@@ -206,6 +281,52 @@ class PrismWarsGame:
         self.next_turn()
         return False
     
+    def can_afford_action(self, player_idx, action_type, piece_type=None):
+        """Check if player can afford an action"""
+        if action_type == 'place':
+            cost = self.piece_costs.get(piece_type, 0)
+        elif action_type == 'pickup':
+            cost = self.pickup_cost
+        else:
+            return False
+        
+        return self.player_energy[player_idx] >= cost
+    
+    def spend_energy(self, player_idx, amount):
+        """Spend energy for a player"""
+        self.player_energy[player_idx] = max(0, self.player_energy[player_idx] - amount)
+    
+    def refill_energy(self, player_idx):
+        """Refill energy at start of turn"""
+        self.player_energy[player_idx] = self.energy_per_turn
+    
+    def pickup_piece(self, x, y, player_idx):
+        """Pick up a piece from the board"""
+        if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
+            return False, "Invalid coordinates"
+        
+        piece = self.board[y][x]
+        if piece is None:
+            return False, "No piece to pick up"
+        
+        if piece['player'] != player_idx:
+            return False, "Can only pick up your own pieces"
+        
+        if not self.can_afford_action(player_idx, 'pickup'):
+            return False, f"Not enough energy (need {self.pickup_cost})"
+        
+        # Return piece to inventory
+        piece_type = piece['type']
+        self.player_inventory[player_idx][piece_type] += 1
+        
+        # Remove from board
+        self.board[y][x] = None
+        
+        # Spend energy
+        self.spend_energy(player_idx, self.pickup_cost)
+        
+        return True, "Piece picked up"
+    
     def place_piece(self, x, y, piece_type, rotation=0):
         """Place a piece on the board"""
         if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
@@ -221,9 +342,16 @@ class PrismWarsGame:
             return False, "Invalid piece type"
         
         player_idx = self.current_player
-        if self.player_inventory[player_idx][piece_type] <= 0:
-            return False, f"No {piece_type}s remaining"
         
+        if self.player_inventory[player_idx][piece_type] <= 0:
+            return False, f"No {piece_type}s remaining in inventory"
+        
+        # Check energy cost
+        if not self.can_afford_action(player_idx, 'place', piece_type):
+            cost = self.piece_costs[piece_type]
+            return False, f"Not enough energy (need {cost}, have {self.player_energy[player_idx]})"
+        
+        # Place piece
         self.board[y][x] = {
             'type': piece_type,
             'player': player_idx,
@@ -233,10 +361,12 @@ class PrismWarsGame:
         
         self.player_inventory[player_idx][piece_type] -= 1
         
+        # Spend energy
+        cost = self.piece_costs[piece_type]
+        self.spend_energy(player_idx, cost)
+        
         # Reset missed turns on successful move
         self.missed_turns[player_idx] = 0
-        
-        self.next_turn()
         
         return True, "Piece placed successfully"
     
@@ -249,6 +379,9 @@ class PrismWarsGame:
         while self.current_player in self.disconnected_players and attempts < len(self.players):
             self.current_player = (self.current_player + 1) % len(self.players)
             attempts += 1
+        
+        # Refill energy for new turn
+        self.refill_energy(self.current_player)
         
         # Reset turn timer
         self.turn_start_time = time.time()
@@ -277,10 +410,8 @@ class PrismWarsGame:
     
     def calculate_light_paths_with_preview(self, preview_x, preview_y, preview_piece_type, preview_rotation):
         """Calculate light paths with a preview piece temporarily placed"""
-        # Save current board state
         original_piece = self.board[preview_y][preview_x]
         
-        # Place preview piece
         self.board[preview_y][preview_x] = {
             'type': preview_piece_type,
             'player': self.current_player,
@@ -288,10 +419,8 @@ class PrismWarsGame:
             'color': self.players[self.current_player]['color']
         }
         
-        # Calculate paths
         territory = self.calculate_light_paths()
         
-        # Restore original state
         self.board[preview_y][preview_x] = original_piece
         
         return territory
@@ -307,7 +436,7 @@ class PrismWarsGame:
         
         return segments
     
-    def _trace_beam_segments(self, source, visited=None, blocker_penetrated=False):
+    def _trace_beam_segments(self, source, visited=None):
         """Trace beam and return segments for animation"""
         if visited is None:
             visited = set()
@@ -367,15 +496,9 @@ class PrismWarsGame:
             
             piece_type = piece['type']
             
+            # Blocker stops light completely (reverted from penetration)
             if piece_type == 'blocker':
-                if not blocker_penetrated:
-                    blocker_penetrated = True
-                    segment_start = (x, y)
-                    x += dx
-                    y += dy
-                    continue
-                else:
-                    break
+                break
             
             elif piece_type == 'mirror':
                 rotation = piece['rotation']
@@ -397,7 +520,7 @@ class PrismWarsGame:
                         'player': player,
                         'color': color
                     }
-                    segments.extend(self._trace_beam_segments(new_source, visited.copy(), blocker_penetrated))
+                    segments.extend(self._trace_beam_segments(new_source, visited.copy()))
                 
                 if new_directions:
                     direction = new_directions[0]
@@ -419,7 +542,7 @@ class PrismWarsGame:
                         'player': player,
                         'color': color
                     }
-                    segments.extend(self._trace_beam_segments(new_source, visited.copy(), blocker_penetrated))
+                    segments.extend(self._trace_beam_segments(new_source, visited.copy()))
                 
                 if new_directions:
                     direction = new_directions[0]
@@ -432,7 +555,7 @@ class PrismWarsGame:
         
         return segments
     
-    def _trace_light_beam(self, source, territory, visited=None, blocker_penetrated=False):
+    def _trace_light_beam(self, source, territory, visited=None):
         """Trace a single light beam through the board"""
         if visited is None:
             visited = set()
@@ -467,14 +590,9 @@ class PrismWarsGame:
             
             piece_type = piece['type']
             
+            # Blocker stops light completely
             if piece_type == 'blocker':
-                if not blocker_penetrated:
-                    blocker_penetrated = True
-                    x += dx
-                    y += dy
-                    continue
-                else:
-                    break
+                break
             
             elif piece_type == 'mirror':
                 rotation = piece['rotation']
@@ -495,7 +613,7 @@ class PrismWarsGame:
                         'player': player,
                         'color': source['color']
                     }
-                    self._trace_light_beam(new_source, territory, visited.copy(), blocker_penetrated)
+                    self._trace_light_beam(new_source, territory, visited.copy())
                 
                 if new_directions:
                     direction = new_directions[0]
@@ -516,7 +634,7 @@ class PrismWarsGame:
                         'player': player,
                         'color': source['color']
                     }
-                    self._trace_light_beam(new_source, territory, visited.copy(), blocker_penetrated)
+                    self._trace_light_beam(new_source, territory, visited.copy())
                 
                 if new_directions:
                     direction = new_directions[0]
@@ -577,7 +695,7 @@ class PrismWarsGame:
         return [straight, left_dir, right_dir]
     
     def calculate_detailed_scores(self):
-        """Calculate detailed scores with breakdowns"""
+        """Calculate detailed scores - objectives and combos recalculated each time"""
         territory = self.calculate_light_paths()
         base_scores = {i: 0 for i in range(len(self.players))}
         
@@ -610,7 +728,7 @@ class PrismWarsGame:
         return detailed_scores
     
     def _calculate_combos(self, territory):
-        """Calculate combo bonuses"""
+        """Calculate combo bonuses - recalculated each time"""
         combo_scores = []
         
         for player_idx in range(len(self.players)):
@@ -696,7 +814,7 @@ class PrismWarsGame:
         return bonus
     
     def _calculate_objectives(self, territory):
-        """Calculate objective completion bonuses"""
+        """Calculate objective completion bonuses - recalculated each time"""
         objective_scores = []
         
         for player_idx in range(len(self.players)):
@@ -711,12 +829,6 @@ class PrismWarsGame:
             
             for objective in self.objectives[player_idx]:
                 obj_id = objective['id']
-                
-                if obj_id in self.completed_objectives[player_idx]:
-                    score['completed'].append(objective)
-                    score['total'] += objective['points']
-                    continue
-                
                 completed = False
                 
                 if obj_id == 'corners':
@@ -724,7 +836,7 @@ class PrismWarsGame:
                     completed = all(player_idx in territory[y][x] and len(territory[y][x]) == 1 for x, y in corners)
                 
                 elif obj_id == 'center':
-                    center_cells = [(5, 5), (6, 5), (5, 6), (6, 6)]
+                    center_cells = [(7, 7), (8, 7), (7, 8), (8, 8)]
                     completed = all(player_idx in territory[y][x] and len(territory[y][x]) == 1 for x, y in center_cells)
                 
                 elif obj_id == 'edge_control':
@@ -751,18 +863,17 @@ class PrismWarsGame:
                     for y in range(self.board_size):
                         for x in range(self.board_size):
                             if player_idx in territory[y][x] and len(territory[y][x]) == 1:
-                                if x < 6 and y < 6:
+                                if x < 7 and y < 7:
                                     quadrants[0] = True
-                                elif x >= 6 and y < 6:
+                                elif x >= 7 and y < 7:
                                     quadrants[1] = True
-                                elif x < 6 and y >= 6:
+                                elif x < 7 and y >= 7:
                                     quadrants[2] = True
                                 else:
                                     quadrants[3] = True
                     completed = all(quadrants)
                 
                 if completed:
-                    self.completed_objectives[player_idx].add(obj_id)
                     score['completed'].append(objective)
                     score['total'] += objective['points']
             
@@ -843,6 +954,69 @@ class PrismWarsGame:
                 'breakdown': None
             }
     
+    def to_dict(self):
+        """Convert game to dictionary for JSON serialization"""
+        return {
+            'game_id': self.game_id,
+            'max_players': self.max_players,
+            'players': self.players,
+            'state': self.state,
+            'board': self.board,
+            'board_size': self.board_size,
+            'light_sources': self.light_sources,
+            'current_player': self.current_player,
+            'round_number': self.round_number,
+            'max_rounds': self.max_rounds,
+            'winner': self.winner,
+            'player_inventory': self.player_inventory,
+            'player_energy': self.player_energy,
+            'amplifier_tiles': self.amplifier_tiles,
+            'protected_zones': self.protected_zones,
+            'win_points': self.win_points,
+            'objectives': self.objectives,
+            'completed_objectives': [list(s) for s in self.completed_objectives],
+            'turn_start_time': self.turn_start_time,
+            'missed_turns': self.missed_turns,
+            'disconnected_players': list(self.disconnected_players),
+            'last_heartbeat': self.last_heartbeat,
+            'pending_disconnects': self.pending_disconnects,
+            'created_at': self.created_at.isoformat() if hasattr(self, 'created_at') else None,
+            'started_at': self.started_at.isoformat() if hasattr(self, 'started_at') else None
+        }
+    
+    @classmethod
+    def from_dict(cls, data):
+        """Create game from dictionary"""
+        game = cls(data['game_id'], data['max_players'])
+        game.players = data['players']
+        game.state = data['state']
+        game.board = data['board']
+        game.board_size = data['board_size']
+        game.light_sources = data['light_sources']
+        game.current_player = data['current_player']
+        game.round_number = data['round_number']
+        game.max_rounds = data['max_rounds']
+        game.winner = data['winner']
+        game.player_inventory = data['player_inventory']
+        game.player_energy = data.get('player_energy', [10] * len(data['players']))
+        game.amplifier_tiles = [tuple(t) for t in data['amplifier_tiles']]
+        game.protected_zones = [tuple(z) for z in data['protected_zones']]
+        game.win_points = data['win_points']
+        game.objectives = data['objectives']
+        game.completed_objectives = [set(s) for s in data.get('completed_objectives', [[] for _ in data['players']])]
+        game.turn_start_time = data.get('turn_start_time')
+        game.missed_turns = data.get('missed_turns', {})
+        game.disconnected_players = set(data.get('disconnected_players', []))
+        game.last_heartbeat = data.get('last_heartbeat', {})
+        game.pending_disconnects = data.get('pending_disconnects', {})
+        
+        if data.get('created_at'):
+            game.created_at = datetime.fromisoformat(data['created_at'])
+        if data.get('started_at'):
+            game.started_at = datetime.fromisoformat(data['started_at'])
+        
+        return game
+    
     def get_state(self):
         """Get the full game state for clients"""
         territory = self.calculate_light_paths()
@@ -859,6 +1033,10 @@ class PrismWarsGame:
             'max_rounds': self.max_rounds,
             'winner': self.winner,
             'player_inventory': self.player_inventory,
+            'player_energy': self.player_energy,
+            'energy_per_turn': self.energy_per_turn,
+            'piece_costs': self.piece_costs,
+            'pickup_cost': self.pickup_cost,
             'territory': [[list(cell) for cell in row] for row in territory],
             'scores': self.get_scores(),
             'amplifier_tiles': self.amplifier_tiles,

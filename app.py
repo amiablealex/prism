@@ -19,17 +19,38 @@ lobby_manager = LobbyManager()
 # Ensure data directory exists
 os.makedirs('data/games', exist_ok=True)
 
+# Load saved games on startup
+def load_saved_games():
+    """Load saved games from disk"""
+    try:
+        for filename in os.listdir('data/games'):
+            if filename.endswith('.json'):
+                game_id = filename[:-5]  # Remove .json
+                try:
+                    with open(f'data/games/{filename}', 'r') as f:
+                        game_data = json.load(f)
+                        game = PrismWarsGame.from_dict(game_data)
+                        lobby_manager.games[game_id] = game
+                        print(f"Loaded game: {game_id}")
+                except Exception as e:
+                    print(f"Error loading game {game_id}: {e}")
+    except Exception as e:
+        print(f"Error loading games directory: {e}")
+
 # Turn timer check thread
 def check_turn_timers():
-    """Background thread to check for turn timeouts"""
+    """Background thread to check for turn timeouts and disconnections"""
     while True:
         try:
             time.sleep(1)  # Check every second
             
             for game_id, game in list(lobby_manager.games.items()):
                 if game.state == 'playing':
+                    # Check for disconnections
+                    game.check_disconnections()
+                    
+                    # Check for turn timeout
                     if game.check_turn_timeout():
-                        # Turn timed out
                         game_ended = game.handle_turn_timeout()
                         
                         # Broadcast updated state
@@ -41,12 +62,18 @@ def check_turn_timers():
                                 'final_scores': game.get_scores(),
                                 'reason': 'Player disconnections'
                             }, room=game_id)
+                        
+                        # Save game state
+                        save_game_state(game_id)
         except Exception as e:
             print(f"Error in turn timer thread: {e}")
 
 # Start timer thread
 timer_thread = threading.Thread(target=check_turn_timers, daemon=True)
 timer_thread.start()
+
+# Load saved games
+load_saved_games()
 
 def cleanup_old_games():
     """Remove games older than 7 days"""
@@ -124,6 +151,62 @@ def join_game():
         'player_id': player_id
     })
 
+@app.route('/reconnect', methods=['POST'])
+def reconnect_to_game():
+    """Handle player reconnection"""
+    data = request.json
+    game_id = data.get('game_id', '').upper()
+    player_id = data.get('player_id')
+    
+    if not game_id or not player_id:
+        return jsonify({'error': 'Missing game_id or player_id'}), 400
+    
+    if game_id not in lobby_manager.games:
+        return jsonify({'error': 'Game not found'}), 404
+    
+    game = lobby_manager.games[game_id]
+    
+    # Find player index
+    player_idx = None
+    for i, player in enumerate(game.players):
+        if player['id'] == player_id:
+            player_idx = i
+            break
+    
+    if player_idx is None:
+        return jsonify({'error': 'Player not in this game'}), 403
+    
+    # Handle reconnection
+    game.handle_reconnection(player_idx)
+    
+    # Update session
+    session['player_id'] = player_id
+    
+    return jsonify({
+        'success': True,
+        'game_id': game_id,
+        'state': game.state,
+        'redirect': f'/game/{game_id}' if game.state == 'playing' else f'/lobby/{game_id}'
+    })
+
+@app.route('/check_game', methods=['POST'])
+def check_game():
+    """Check if a game exists and get its state"""
+    data = request.json
+    game_id = data.get('game_id', '').upper()
+    
+    if not game_id or game_id not in lobby_manager.games:
+        return jsonify({'exists': False})
+    
+    game = lobby_manager.games[game_id]
+    
+    return jsonify({
+        'exists': True,
+        'state': game.state,
+        'players': len(game.players),
+        'max_players': game.max_players
+    })
+
 @app.route('/lobby/<game_id>')
 def lobby(game_id):
     game_id = game_id.upper()
@@ -163,6 +246,23 @@ def handle_connect():
 @socketio.on('disconnect')
 def handle_disconnect():
     print('Client disconnected')
+
+@socketio.on('heartbeat')
+def handle_heartbeat(data):
+    """Handle heartbeat from client"""
+    game_id = data.get('game_id', '').upper()
+    player_id = data.get('player_id')
+    
+    if game_id not in lobby_manager.games:
+        return
+    
+    game = lobby_manager.games[game_id]
+    
+    # Find player index
+    for i, player in enumerate(game.players):
+        if player['id'] == player_id:
+            game.update_heartbeat(i)
+            break
 
 @socketio.on('join_lobby')
 def handle_join_lobby(data):
@@ -225,6 +325,12 @@ def handle_join_game_room(data):
     join_room(game_id)
     game = lobby_manager.games[game_id]
     
+    # Find player index and update heartbeat
+    for i, player in enumerate(game.players):
+        if player['id'] == player_id:
+            game.update_heartbeat(i)
+            break
+    
     emit('game_state_update', game.get_state())
 
 @socketio.on('request_preview')
@@ -286,6 +392,9 @@ def handle_place_piece(data):
         emit('error', {'message': 'Not your turn'})
         return
     
+    # Update heartbeat
+    game.update_heartbeat(current_player_idx)
+    
     success, message = game.place_piece(x, y, piece_type, rotation)
     
     if success:
@@ -298,6 +407,36 @@ def handle_place_piece(data):
                 'winner': game.winner,
                 'final_scores': game.get_scores()
             }, room=game_id)
+    else:
+        emit('error', {'message': message})
+
+@socketio.on('pickup_piece')
+def handle_pickup_piece(data):
+    """Handle picking up a piece from the board"""
+    game_id = data['game_id'].upper()
+    player_id = data['player_id']
+    x = data['x']
+    y = data['y']
+    
+    if game_id not in lobby_manager.games:
+        emit('error', {'message': 'Game not found'})
+        return
+    
+    game = lobby_manager.games[game_id]
+    
+    current_player_idx = game.current_player
+    if game.players[current_player_idx]['id'] != player_id:
+        emit('error', {'message': 'Not your turn'})
+        return
+    
+    # Update heartbeat
+    game.update_heartbeat(current_player_idx)
+    
+    success, message = game.pickup_piece(x, y, current_player_idx)
+    
+    if success:
+        save_game_state(game_id)
+        emit('game_state_update', game.get_state(), room=game_id)
     else:
         emit('error', {'message': message})
 
@@ -317,6 +456,9 @@ def handle_pass_turn(data):
         emit('error', {'message': 'Not your turn'})
         return
     
+    # Update heartbeat
+    game.update_heartbeat(current_player_idx)
+    
     game.next_turn()
     
     save_game_state(game_id)
@@ -332,10 +474,13 @@ def handle_pass_turn(data):
 def save_game_state(game_id):
     """Save game state to JSON file"""
     game = lobby_manager.games[game_id]
-    state = game.get_state()
+    state = game.to_dict()
     
-    with open(f'data/games/{game_id}.json', 'w') as f:
-        json.dump(state, f, indent=2)
+    try:
+        with open(f'data/games/{game_id}.json', 'w') as f:
+            json.dump(state, f, indent=2)
+    except Exception as e:
+        print(f"Error saving game {game_id}: {e}")
 
 if __name__ == '__main__':
     cleanup_old_games()
