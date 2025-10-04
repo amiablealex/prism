@@ -426,71 +426,58 @@ function updateUI() {
     
     turnIndicator.style.backgroundColor = currentPlayer.color;
     turnText.textContent = `${currentPlayer.username}'s Turn`;
-    
-    // Update scores
+
+    // Replace scores + players update with consolidated scoreboard
     const scoresList = document.getElementById('scoresList');
     scoresList.innerHTML = '';
     
     gameState.scores.forEach((score, idx) => {
         const scoreItem = document.createElement('div');
-        scoreItem.className = 'score-item';
+        scoreItem.className = 'scoreboard-item';
+        
         if (idx === gameState.current_player) {
             scoreItem.classList.add('current-player');
         }
         
-        const isDisconnected = gameState.disconnected_players && gameState.disconnected_players.includes(idx);
+        const isDisconnected = gameState.disconnected_players?.includes(idx);
         if (isDisconnected) {
             scoreItem.classList.add('disconnected');
         }
         
+        const player = gameState.players[idx];
+        const missedTurns = gameState.missed_turns?.[idx] || 0;
         const breakdown = score.breakdown;
         const progressPercent = Math.min(100, (score.score / gameState.win_points) * 100);
         
+        let statusText = '';
+        if (player.id === playerId) statusText = '(You)';
+        if (idx === gameState.current_player) statusText += ' [Active]';
+        if (isDisconnected) statusText = '[REMOVED]';
+        else if (missedTurns > 0) statusText += ` [${missedTurns}/3]`;
+        
         scoreItem.innerHTML = `
-            <div class="score-item-left">
-                <div class="score-color" style="background-color: ${score.color}"></div>
-                <div class="score-details">
-                    <span class="score-name">${score.player}${isDisconnected ? ' (DC)' : ''}</span>
-                    <div class="score-breakdown-mini">
+            <div class="scoreboard-left">
+                <div class="scoreboard-color" style="background-color: ${score.color}"></div>
+                <div class="scoreboard-info">
+                    <div class="scoreboard-name">
+                        ${score.player}
+                        ${statusText ? `<span class="scoreboard-status">${statusText}</span>` : ''}
+                    </div>
+                    <div class="scoreboard-breakdown">
                         T:${breakdown.base_territory} | C:${breakdown.combos.total} | O:${breakdown.objectives.total}
                     </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${progressPercent}%; background-color: ${score.color}"></div>
+                    <div class="scoreboard-progress">
+                        <div class="scoreboard-progress-fill" style="width: ${progressPercent}%; background-color: ${score.color}"></div>
                     </div>
                 </div>
             </div>
-            <div class="score-right">
-                <span class="score-value">${score.score}</span>
-                <span class="score-target">/${gameState.win_points}</span>
+            <div class="scoreboard-right">
+                <span class="scoreboard-score">${score.score}</span>
+                <span class="scoreboard-target">/${gameState.win_points}</span>
             </div>
         `;
         
         scoresList.appendChild(scoreItem);
-    });
-    
-    // Update players info
-    const playersInfo = document.getElementById('playersInfo');
-    playersInfo.innerHTML = '';
-    
-    gameState.players.forEach((player, idx) => {
-        const playerItem = document.createElement('div');
-        playerItem.className = 'player-info-item';
-        if (idx === gameState.current_player) {
-            playerItem.classList.add('active');
-        }
-        
-        const isDisconnected = gameState.disconnected_players && gameState.disconnected_players.includes(idx);
-        const missedTurns = gameState.missed_turns ? gameState.missed_turns[idx] || 0 : 0;
-
-        playerItem.innerHTML = `
-            <div class="player-info-color" style="background-color: ${player.color}"></div>
-            <span class="player-info-name">
-                ${player.username}${player.id === playerId ? ' (You)' : ''}
-                ${isDisconnected ? ' [REMOVED]' : missedTurns > 0 ? ` [${missedTurns}/3]` : ''}
-            </span>
-        `;
-        
-        playersInfo.appendChild(playerItem);
     });
     
     // Update inventory and energy
@@ -592,37 +579,43 @@ function updateCombosDisplay() {
     
     combosDiv.innerHTML = '<h4>Combo Bonuses</h4>';
     
-    // Mirror Chain combo
+    // Mirror Chain - show potential or actual
     const mirrorCombo = document.createElement('div');
     mirrorCombo.className = 'combo-item' + (combos.perfect_reflection > 0 ? ' active' : '');
+    const mirrorPoints = combos.perfect_reflection > 0 ? `+${combos.perfect_reflection}` : '+5';
+    const mirrorClass = combos.perfect_reflection > 0 ? '' : ' potential';
+    
     mirrorCombo.innerHTML = `
         <div class="combo-header">
             <span class="combo-icon">${combos.perfect_reflection > 0 ? '✓' : '○'}</span>
             <span class="combo-name">Perfect Reflection</span>
-            <span class="combo-points">+${combos.perfect_reflection}</span>
+            <span class="combo-points${mirrorClass}">${mirrorPoints}</span>
         </div>
-        <div class="combo-description">Chain 3+ mirrors together</div>
+        <div class="combo-description">Chain 3+ mirrors in a light beam</div>
     `;
     combosDiv.appendChild(mirrorCombo);
     
-    // Prism Cascade combo
+    // Prism Cascade - show potential or actual
     const prismCombo = document.createElement('div');
     prismCombo.className = 'combo-item' + (combos.prism_cascade > 0 ? ' active' : '');
+    const prismPoints = combos.prism_cascade > 0 ? `+${combos.prism_cascade}` : '+3';
+    const prismClass = combos.prism_cascade > 0 ? '' : ' potential';
+    
     prismCombo.innerHTML = `
         <div class="combo-header">
             <span class="combo-icon">${combos.prism_cascade > 0 ? '✓' : '○'}</span>
             <span class="combo-name">Prism Cascade</span>
-            <span class="combo-points">+${combos.prism_cascade}</span>
+            <span class="combo-points${prismClass}">${prismPoints}</span>
         </div>
-        <div class="combo-description">Prism/splitter controlling 10+ cells nearby</div>
+        <div class="combo-description">Prism/splitter controlling 10+ nearby cells</div>
     `;
     combosDiv.appendChild(prismCombo);
     
-    // Show details if any combos active
+    // Details if any combos active
     if (combos.details && combos.details.length > 0) {
         const detailsDiv = document.createElement('div');
         detailsDiv.className = 'combo-details';
-        detailsDiv.innerHTML = combos.details.map(detail => `<div class="combo-detail">• ${detail}</div>`).join('');
+        detailsDiv.innerHTML = combos.details.map(d => `<div class="combo-detail">• ${d}</div>`).join('');
         combosDiv.appendChild(detailsDiv);
     }
 }
@@ -883,7 +876,8 @@ function renderBoard() {
         ctx.lineTo(boardOffsetX + boardSize * cellSize, boardOffsetY + i * cellSize);
         ctx.stroke();
     }
-    
+
+    drawCenterZone();
     drawLightSources();
     drawPieces();
     
@@ -1048,6 +1042,28 @@ function drawLightSources() {
         ctx.stroke();
         ctx.restore();
     });
+}
+
+function drawCenterZone() {
+    if (!gameState) return;
+    
+    // For 16x16 board, center is (7,7), (8,7), (7,8), (8,8)
+    const centerX = 7;
+    const centerY = 7;
+    const centerSize = 2; // 2x2 area
+    
+    ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)'; // Subtle gold
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 4]); // Dashed line
+    
+    ctx.strokeRect(
+        boardOffsetX + centerX * cellSize,
+        boardOffsetY + centerY * cellSize,
+        centerSize * cellSize,
+        centerSize * cellSize
+    );
+    
+    ctx.setLineDash([]); // Reset dash
 }
 
 function drawPieces() {

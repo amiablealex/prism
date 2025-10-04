@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Playing - Prism Wars v4.5</title>
+    <title>Prism Wars v4.6</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/game.css') }}">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -34,16 +34,22 @@
 
         <!-- Main Game Area -->
         <div class="game-main">
-            <!-- Left Sidebar -->
+            <!-- Left Sidebar - CONSOLIDATED -->
             <div class="sidebar sidebar-left">
-                <div class="scores-panel">
-                    <h3>Scores</h3>
+                <!-- Combined Scoreboard -->
+                <div class="scoreboard-panel">
+                    <h3>Scoreboard</h3>
                     <div id="scoresList"></div>
                 </div>
                 
-                <div class="players-panel">
-                    <h3>Players</h3>
-                    <div id="playersInfo"></div>
+                <!-- Objectives -->
+                <div class="objectives-panel">
+                    <div id="objectivesDisplay"></div>
+                </div>
+
+                <!-- Combos -->
+                <div class="combos-panel">
+                    <div id="combosDisplay"></div>
                 </div>
             </div>
 
@@ -52,9 +58,9 @@
                 <canvas id="gameCanvas"></canvas>
             </div>
 
-            <!-- Right Sidebar - ACTIONS FIRST -->
+            <!-- Right Sidebar -->
             <div class="sidebar sidebar-right">
-                <!-- Actions Panel - Now First -->
+                <!-- Actions Panel -->
                 <div class="actions-panel">
                     <button id="togglePickupMode" class="btn-action">🔄 Pickup Mode: OFF</button>
                     <button id="passTurnBtn" class="btn-action">⏭️ Pass Turn</button>
@@ -84,16 +90,6 @@
                             <button class="btn-rotate" onclick="rotatePiece(90)">↷</button>
                         </div>
                     </div>
-                </div>
-
-                <!-- Objectives Panel -->
-                <div class="objectives-panel">
-                    <div id="objectivesDisplay"></div>
-                </div>
-
-                <!-- Combos Panel - NEW -->
-                <div class="combos-panel">
-                    <div id="combosDisplay"></div>
                 </div>
 
                 <!-- Visual Controls -->
@@ -134,7 +130,7 @@
                     </div>
                     <div class="legend-item">
                         <span class="legend-icon">🌟</span>
-                        <span>Amplifiers - 3x pts</span>
+                        <span>Amplifiers - 3x</span>
                     </div>
                 </div>
             </div>
