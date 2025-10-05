@@ -371,9 +371,12 @@ class PrismWarsGame:
         self.next_turn()
         
         return True, "Piece placed successfully"
-    
+
     def next_turn(self):
         """Move to the next player's turn"""
+        # Store the starting player to detect when we complete a full round
+        starting_player = self.current_player
+        
         self.current_player = (self.current_player + 1) % len(self.players)
         
         attempts = 0
@@ -384,7 +387,7 @@ class PrismWarsGame:
         self.gain_energy(self.current_player)
         
         self.turn_start_time = time.time()
-
+        
         # Get active players (non-disconnected)
         active_players = [i for i in range(len(self.players)) if i not in self.disconnected_players]
         
@@ -402,7 +405,7 @@ class PrismWarsGame:
                     if player_idx not in self.disconnected_players and score_data['total'] >= self.win_points:
                         self.end_game()
                         break
-
+    
     def calculate_light_paths(self):
         """Calculate all light beam paths and territory control"""
         territory = [[set() for _ in range(self.board_size)] for _ in range(self.board_size)]
