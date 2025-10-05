@@ -31,6 +31,7 @@ class PrismWarsGame:
         self.win_points = 75
         self.objectives = []
         self.completed_objectives = []
+        self.last_piece_placement = None  # Track last placed piece (x, y, player_idx)
         
         # Energy system
         self.energy_per_turn = 2
@@ -360,6 +361,8 @@ class PrismWarsGame:
             'rotation': rotation,
             'color': self.players[player_idx]['color']
         }
+        
+        self.last_piece_placement = (x, y, player_idx)
         
         self.player_inventory[player_idx][piece_type] -= 1
         
@@ -735,9 +738,9 @@ class PrismWarsGame:
     def _calculate_combos(self, territory):
         """Calculate combo bonuses - mirror chains and longest beam"""
         combo_scores = []
-        
+
         # First, find the longest beam across all players
-        longest_beam_player = None
+        longest_beam_players = []
         longest_beam_length = 0
         
         for player_idx in range(len(self.players)):
@@ -747,7 +750,12 @@ class PrismWarsGame:
             player_longest = self._find_longest_beam(player_idx)
             if player_longest > longest_beam_length:
                 longest_beam_length = player_longest
-                longest_beam_player = player_idx
+                longest_beam_players = [player_idx]
+            elif player_longest == longest_beam_length and player_longest > 0:
+                longest_beam_players.append(player_idx)
+        
+        # Only award if there's a single winner
+        longest_beam_player = longest_beam_players[0] if len(longest_beam_players) == 1 else None
         
         for player_idx in range(len(self.players)):
             if player_idx in self.disconnected_players:
@@ -1147,6 +1155,7 @@ class PrismWarsGame:
             'missed_turns': self.missed_turns,
             'disconnected_players': list(self.disconnected_players),
             'last_heartbeat': self.last_heartbeat,
+            'last_piece_placement': self.last_piece_placement,
             'pending_disconnects': self.pending_disconnects,
             'created_at': self.created_at.isoformat() if hasattr(self, 'created_at') else None,
             'started_at': self.started_at.isoformat() if hasattr(self, 'started_at') else None
@@ -1178,6 +1187,7 @@ class PrismWarsGame:
         game.disconnected_players = set(data.get('disconnected_players', []))
         game.last_heartbeat = data.get('last_heartbeat', {})
         game.pending_disconnects = data.get('pending_disconnects', {})
+        game.last_piece_placement = data.get('last_piece_placement')
         
         if data.get('created_at'):
             game.created_at = datetime.fromisoformat(data['created_at'])
@@ -1196,6 +1206,7 @@ class PrismWarsGame:
             'state': self.state,
             'board': self.board,
             'board_size': self.board_size,
+            'last_piece_placement': self.last_piece_placement,
             'light_sources': self.light_sources,
             'current_player': self.current_player,
             'round_number': self.round_number,

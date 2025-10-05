@@ -458,6 +458,8 @@ function updateUI() {
         if (idx === gameState.current_player) statusText += ' [Active]';
         if (isDisconnected) statusText = '[REMOVED]';
         else if (missedTurns > 0) statusText += ` [${missedTurns}/3]`;
+
+        const playerEnergy = gameState.player_energy[idx];
         
         scoreItem.innerHTML = `
             <div class="scoreboard-left">
@@ -468,8 +470,8 @@ function updateUI() {
                         ${statusText ? `<span class="scoreboard-status">${statusText}</span>` : ''}
                     </div>
                     <div class="scoreboard-breakdown">
-                        T:${breakdown.base_territory} | C:${breakdown.combos.total} | O:${breakdown.objectives.total}
-                    </div>
+                        ⚡${playerEnergy} | T:${breakdown.base_territory} | C:${breakdown.combos.total} | O:${breakdown.objectives.total}
+                    </div>        
                     <div class="scoreboard-progress">
                         <div class="scoreboard-progress-fill" style="width: ${progressPercent}%; background-color: ${score.color}"></div>
                     </div>
@@ -1082,13 +1084,18 @@ function drawPieces() {
                 if (!showOtherPlayers && piece.player !== myPlayerIndex) {
                     continue;
                 }
-                drawPiece(x, y, piece);
+                
+                const isLastPlaced = gameState.last_piece_placement && 
+                                    gameState.last_piece_placement[0] === x && 
+                                    gameState.last_piece_placement[1] === y;
+                
+                drawPiece(x, y, piece, isLastPlaced);
             }
         }
     }
 }
 
-function drawPiece(x, y, piece) {
+function drawPiece(x, y, piece, isLastPlaced = false) {
     const centerX = boardOffsetX + (x + 0.5) * cellSize;
     const centerY = boardOffsetY + (y + 0.5) * cellSize;
     const size = cellSize * 0.6;
@@ -1146,6 +1153,19 @@ function drawPiece(x, y, piece) {
     }
     
     ctx.restore();
+
+    if (isLastPlaced) {
+        ctx.strokeStyle = '#FFD93D';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([5, 5]);
+        ctx.strokeRect(
+            centerX - size / 2 - 3,
+            centerY - size / 2 - 3,
+            size + 6,
+            size + 6
+        );
+        ctx.setLineDash([]);
+    }
 }
 
 function drawHoverPreview(x, y) {
@@ -1227,14 +1247,54 @@ function showGameOver(data) {
         `;
     } else {
         const breakdown = data.winner.breakdown;
+        
+        let objectivesHTML = '';
+        if (breakdown && breakdown.objectives && breakdown.objectives.completed.length > 0) {
+            objectivesHTML = '<div class="winner-objectives">';
+            breakdown.objectives.completed.forEach(obj => {
+                objectivesHTML += `
+                    <div class="winner-objective-item">
+                        <span class="winner-objective-icon">✓</span>
+                        <span class="winner-objective-name">${obj.name}</span>
+                        <span class="winner-objective-points">+${obj.points}</span>
+                    </div>
+                `;
+            });
+            objectivesHTML += '</div>';
+        }
+        
+        let combosHTML = '';
+        if (breakdown && breakdown.combos && breakdown.combos.details.length > 0) {
+            combosHTML = '<div class="winner-combos">';
+            breakdown.combos.details.forEach(detail => {
+                combosHTML += `<div class="winner-combo-detail">• ${detail}</div>`;
+            });
+            combosHTML += '</div>';
+        }
+        
         winnerInfo.innerHTML = `
             <div class="winner-name">${data.winner.username} Wins!</div>
-            <p style="color: ${data.winner.color}">Total Score: ${data.winner.score} points</p>
+            <p style="color: ${data.winner.color}; font-size: 1.5rem; font-weight: 700;">Total Score: ${data.winner.score} points</p>
             ${breakdown ? `
                 <div class="winner-breakdown">
-                    <p>Territory: ${breakdown.base_territory}</p>
-                    <p>Combos: ${breakdown.combos.total}</p>
-                    <p>Objectives: ${breakdown.objectives.total}</p>
+                    <div class="winner-breakdown-section">
+                        <h4>Territory</h4>
+                        <p class="winner-breakdown-value">${breakdown.base_territory} points</p>
+                    </div>
+                    
+                    ${breakdown.objectives.total > 0 ? `
+                        <div class="winner-breakdown-section">
+                            <h4>Objectives (${breakdown.objectives.total} points)</h4>
+                            ${objectivesHTML}
+                        </div>
+                    ` : ''}
+                    
+                    ${breakdown.combos.total > 0 ? `
+                        <div class="winner-breakdown-section">
+                            <h4>Combos (${breakdown.combos.total} points)</h4>
+                            ${combosHTML}
+                        </div>
+                    ` : ''}
                 </div>
             ` : ''}
             ${data.reason ? `<p style="color: #FFD93D; margin-top: 10px;">${data.reason}</p>` : ''}

@@ -891,3 +891,77 @@
     border: 3px dashed rgba(255, 215, 0, 0.4);
     border-radius: 4px;
 }
+
+/* Winner Breakdown Styling */
+.winner-breakdown {
+    margin-top: 20px;
+    text-align: left;
+}
+
+.winner-breakdown-section {
+    background: var(--dark-bg);
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.winner-breakdown-section h4 {
+    color: var(--secondary-color);
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.winner-breakdown-value {
+    color: var(--accent-color);
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 5px 0;
+}
+
+.winner-objectives {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.winner-objective-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    background: rgba(78, 205, 196, 0.1);
+    border: 2px solid var(--secondary-color);
+    border-radius: 6px;
+}
+
+.winner-objective-icon {
+    color: var(--secondary-color);
+    font-size: 1.1rem;
+    width: 20px;
+}
+
+.winner-objective-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--text-light);
+}
+
+.winner-objective-points {
+    color: var(--accent-color);
+    font-weight: 700;
+}
+
+.winner-combos {
+    margin-top: 10px;
+}
+
+.winner-combo-detail {
+    padding: 6px 10px;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    background: rgba(78, 205, 196, 0.05);
+    border-left: 3px solid var(--secondary-color);
+    margin-bottom: 5px;
+}
