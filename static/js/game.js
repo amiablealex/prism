@@ -157,6 +157,10 @@ function initGame(gameId, playerId) {
         updateUI();
         renderBoard();
         updateSessionActivity();
+
+        setTimeout(() => {
+            resizeCanvas();
+        }, 100);
     });
     
     socket.on('preview_update', (data) => {

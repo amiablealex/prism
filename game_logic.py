@@ -384,8 +384,14 @@ class PrismWarsGame:
         self.gain_energy(self.current_player)
         
         self.turn_start_time = time.time()
+
+        # Get active players (non-disconnected)
+        active_players = [i for i in range(len(self.players)) if i not in self.disconnected_players]
         
-        if self.current_player == 0 or attempts >= len(self.players):
+        # Increment round when we cycle back to the first active player
+        # OR if all players are disconnected
+        if (active_players and self.current_player == min(active_players) and 
+            starting_player != self.current_player) or attempts >= len(self.players):
             self.round_number += 1
             
             if self.round_number > self.max_rounds:
@@ -396,7 +402,7 @@ class PrismWarsGame:
                     if player_idx not in self.disconnected_players and score_data['total'] >= self.win_points:
                         self.end_game()
                         break
-    
+
     def calculate_light_paths(self):
         """Calculate all light beam paths and territory control"""
         territory = [[set() for _ in range(self.board_size)] for _ in range(self.board_size)]
@@ -770,7 +776,7 @@ class PrismWarsGame:
                 chains.append(chain_length)
         
         return chains
-    
+
     def _trace_mirror_chain_in_beam(self, source, visited=None):
         """Trace along a light beam and count consecutive mirrors"""
         if visited is None:
@@ -783,7 +789,6 @@ class PrismWarsGame:
         x += dx
         y += dy
         
-        mirror_count = 0
         consecutive_mirrors = 0
         max_consecutive = 0
         
@@ -804,7 +809,7 @@ class PrismWarsGame:
             piece = self.board[y][x]
             
             if piece is None:
-                # No piece, reset consecutive count
+                # Empty cell - mirrors must be consecutive, so break the chain
                 if consecutive_mirrors > max_consecutive:
                     max_consecutive = consecutive_mirrors
                 consecutive_mirrors = 0
@@ -813,37 +818,39 @@ class PrismWarsGame:
                 continue
             
             if piece['type'] == 'blocker':
+                # Blocker stops everything
                 break
             
-            elif piece['type'] == 'mirror' and piece['player'] == source['player']:
-                consecutive_mirrors += 1
-                rotation = piece['rotation']
-                direction = self._reflect_direction(direction, rotation)
-                dx, dy = self._get_direction_delta(direction)
-                x += dx
-                y += dy
-            
             elif piece['type'] == 'mirror':
-                # Mirror from another player, breaks chain
-                if consecutive_mirrors > max_consecutive:
-                    max_consecutive = consecutive_mirrors
-                consecutive_mirrors = 0
-                rotation = piece['rotation']
-                direction = self._reflect_direction(direction, rotation)
-                dx, dy = self._get_direction_delta(direction)
-                x += dx
-                y += dy
+                if piece['player'] == source['player']:
+                    # Same player's mirror - increment chain
+                    consecutive_mirrors += 1
+                    rotation = piece['rotation']
+                    direction = self._reflect_direction(direction, rotation)
+                    dx, dy = self._get_direction_delta(direction)
+                    x += dx
+                    y += dy
+                else:
+                    # Different player's mirror - breaks chain
+                    if consecutive_mirrors > max_consecutive:
+                        max_consecutive = consecutive_mirrors
+                    consecutive_mirrors = 0
+                    rotation = piece['rotation']
+                    direction = self._reflect_direction(direction, rotation)
+                    dx, dy = self._get_direction_delta(direction)
+                    x += dx
+                    y += dy
             
             elif piece['type'] in ['prism', 'splitter']:
-                # Prism/splitter breaks chain but continues beam
+                # Prism/splitter breaks the chain
                 if consecutive_mirrors > max_consecutive:
                     max_consecutive = consecutive_mirrors
-                consecutive_mirrors = 0
                 break
             
             else:
                 break
         
+        # Check final chain length
         if consecutive_mirrors > max_consecutive:
             max_consecutive = consecutive_mirrors
         
