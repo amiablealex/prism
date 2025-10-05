@@ -10,13 +10,12 @@
 - Light entering one portal exits the other
 
 **Portal Direction Rules:**
-- Exit direction depends on which wall the EXIT portal is placed on:
-  - Top edge → beam exits downward
-  - Bottom edge → beam exits upward
-  - Left edge → beam exits rightward (east)
-  - Right edge → beam exits leftward (west)
-- Entry direction doesn't matter
+- Light exits portal in the SAME direction it entered
+  - Enter going down → exit going down
+  - Enter going right → exit going right
+  - Simple and intuitive!
 - Bidirectional: Light can enter either portal
+- Energy: 6 energy for the PAIR (spent on first placement, second is free)
 
 **Strategic Use:**
 - Teleport beams across the board

@@ -680,7 +680,7 @@ function updateSelectedPieceInfo() {
             'prism': 'Splits into 3 beams. Creates powerful area coverage. Only 1 per player! Placing ends your turn.',
             'blocker': 'Completely stops light. Cannot be placed within 3 cells of light sources. Placing ends your turn.',
             'splitter': 'Splits into 2 perpendicular beams. More focused than prisms. Placing ends your turn.',
-            'portal': 'Place on border edges. Light entering one portal exits the other. Direction based on exit wall. Place both portals in one turn (2nd placement ends turn).'
+            'portal': 'Place on border edges. Light entering one portal exits out of the other. Costs 6 energy for the pair. Place both in one turn (2nd placement ends turn).'
         };
         
         const labels = {
@@ -727,6 +727,17 @@ function handleCanvasClick(e) {
     if (gridX >= 0 && gridX < gameState.board_size && gridY >= 0 && gridY < gameState.board_size) {
         if (pickupMode) {
             pickupPiece(gridX, gridY);
+        } else if (portalPlacementInProgress) {
+            // If portal placement in progress, force portal placement
+            const isBorder = (gridX === 0 || gridX === gameState.board_size - 1 || 
+                             gridY === 0 || gridY === gameState.board_size - 1);
+            if (!isBorder) {
+                showNotification('Portals must be placed on border edges', 'error');
+                return;
+            }
+            // Auto-select portal for second placement
+            selectedPiece = 'portal';
+            placePiece(gridX, gridY);
         } else if (selectedPiece) {
             // Check if placing on border for portals
             if (selectedPiece === 'portal') {

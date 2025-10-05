@@ -218,19 +218,11 @@ class PrismWarsGame:
         """Check if a cell is on the border (edge)"""
         return (x == 0 or x == self.board_size - 1 or 
                 y == 0 or y == self.board_size - 1)
-    
-    def _get_portal_exit_direction(self, x, y):
-        """Get the direction light exits a portal based on which wall it's on"""
-        if y == 0:  # Top edge
-            return 'down'
-        elif y == self.board_size - 1:  # Bottom edge
-            return 'up'
-        elif x == 0:  # Left edge
-            return 'right'
-        elif x == self.board_size - 1:  # Right edge
-            return 'left'
-        return None
 
+    def _get_portal_exit_direction(self, entry_direction):
+        """Light exits portal in same direction it entered"""
+        return entry_direction
+    
     def _assign_objectives(self):
         """Assign objectives to each player"""
         all_objectives = [
@@ -366,16 +358,18 @@ class PrismWarsGame:
         """Place a piece on the board - portals require two placements, others end turn immediately"""
         if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
             return False, "Invalid coordinates"
-        
+
         # Portal-specific validation
         if piece_type == 'portal':
             if not self._is_border_cell(x, y):
                 return False, "Portals can only be placed on border edges"
             
+            player_idx = self.current_player
+            
             # Check if there's a portal placement in progress
             if self.portal_placement_in_progress:
                 # Placing second portal
-                if self.portal_placement_in_progress['player'] != self.current_player:
+                if self.portal_placement_in_progress['player'] != player_idx:
                     return False, "Another player's portal placement in progress"
                 
                 first_portal = self.portal_placement_in_progress['first_portal']
@@ -384,9 +378,7 @@ class PrismWarsGame:
                 if (x, y) == first_portal:
                     return False, "Cannot place both portals on same cell"
                 
-                # Place second portal
-                player_idx = self.current_player
-                
+                # Place second portal (NO energy cost for second portal)
                 self.board[y][x] = {
                     'type': 'portal',
                     'player': player_idx,
@@ -419,9 +411,7 @@ class PrismWarsGame:
                 
                 return True, "Portal pair placed successfully"
             else:
-                # Placing first portal
-                player_idx = self.current_player
-                
+                # Placing first portal - check inventory and energy
                 if self.player_inventory[player_idx]['portal'] <= 0:
                     return False, "No portal pairs remaining in inventory"
                 
@@ -438,11 +428,11 @@ class PrismWarsGame:
                     'pair_id': player_idx
                 }
                 
-                # Spend energy (reserved until second portal placed)
+                # Spend energy ONCE for the pair
                 cost = self.piece_costs['portal']
                 self.spend_energy(player_idx, cost)
                 
-                # Mark placement in progress
+                # Mark placement in progress (inventory not decremented yet)
                 self.portal_placement_in_progress = {
                     'player': player_idx,
                     'first_portal': (x, y)
@@ -450,7 +440,8 @@ class PrismWarsGame:
                 
                 self.last_piece_placement = (x, y, player_idx)
                 
-                return True, "First portal placed - place second portal on another border cell"
+                # DO NOT end turn - let them place second portal
+                return True, "First portal placed - click on another border cell to place second portal"
         
         # Non-portal pieces (original logic)
         if piece_type == 'blocker' and (x, y) in self.blocker_exclusion_zones:
@@ -648,7 +639,7 @@ class PrismWarsGame:
             
             if piece_type == 'blocker':
                 break
-            
+
             elif piece_type == 'portal':
                 # Check if this portal has a pair
                 portal_owner = piece['player']
@@ -676,18 +667,16 @@ class PrismWarsGame:
                     else:
                         break
                     
-                    # Get exit direction based on exit portal's wall position
-                    exit_direction = self._get_portal_exit_direction(exit_portal[0], exit_portal[1])
-                    if exit_direction:
-                        # Teleport to exit portal
-                        x, y = exit_portal[0], exit_portal[1]
-                        direction = exit_direction
-                        dx, dy = self._get_direction_delta(direction)
-                        segment_start = (x, y)
-                        x += dx
-                        y += dy
-                    else:
-                        break
+                    # Exit in same direction as entry
+                    exit_direction = self._get_portal_exit_direction(direction)
+                    
+                    # Teleport to exit portal
+                    x, y = exit_portal[0], exit_portal[1]
+                    direction = exit_direction
+                    dx, dy = self._get_direction_delta(direction)
+                    segment_start = (x, y)
+                    x += dx
+                    y += dy
                 else:
                     break
             
@@ -801,21 +790,19 @@ class PrismWarsGame:
                         # Incomplete pair, portal doesn't work
                         break
                     
-                    # Get exit direction based on exit portal's wall position
-                    exit_direction = self._get_portal_exit_direction(exit_portal[0], exit_portal[1])
-                    if exit_direction:
-                        # Teleport to exit portal
-                        x, y = exit_portal[0], exit_portal[1]
-                        direction = exit_direction
-                        dx, dy = self._get_direction_delta(direction)
-                        x += dx
-                        y += dy
-                    else:
-                        break
+                    # Exit in same direction as entry
+                    exit_direction = self._get_portal_exit_direction(direction)
+                    
+                    # Teleport to exit portal
+                    x, y = exit_portal[0], exit_portal[1]
+                    direction = exit_direction
+                    dx, dy = self._get_direction_delta(direction)
+                    x += dx
+                    y += dy
                 else:
                     # No pair, portal doesn't work
                     break
-            
+
             elif piece_type == 'mirror':
                 rotation = piece['rotation']
                 direction = self._reflect_direction(direction, rotation)
@@ -1054,7 +1041,7 @@ class PrismWarsGame:
             
             if piece_type == 'blocker':
                 break
-            
+
             elif piece_type == 'portal':
                 # Check if this portal has a pair
                 portal_owner = piece['player']
@@ -1071,17 +1058,15 @@ class PrismWarsGame:
                     else:
                         break
                     
-                    # Get exit direction
-                    exit_direction = self._get_portal_exit_direction(exit_portal[0], exit_portal[1])
-                    if exit_direction:
-                        # Teleport to exit portal
-                        x, y = exit_portal[0], exit_portal[1]
-                        direction = exit_direction
-                        dx, dy = self._get_direction_delta(direction)
-                        x += dx
-                        y += dy
-                    else:
-                        break
+                    # Exit in same direction as entry
+                    exit_direction = self._get_portal_exit_direction(direction)
+                    
+                    # Teleport to exit portal
+                    x, y = exit_portal[0], exit_portal[1]
+                    direction = exit_direction
+                    dx, dy = self._get_direction_delta(direction)
+                    x += dx
+                    y += dy
                 else:
                     break
             
