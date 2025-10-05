@@ -23,6 +23,7 @@ let showOtherPlayers = true;
 let highlightMyLight = false;
 let showOnlyActivePlayer = false;
 let pickupMode = false;
+let portalPlacementInProgress = false;
 
 // Session persistence functions
 function saveSession(gameId, playerId, playerName) {
@@ -146,6 +147,14 @@ function initGame(gameId, playerId) {
                 break;
             }
         }
+
+        // Check if portal placement in progress
+        if (state.portal_placement_in_progress && 
+            state.portal_placement_in_progress.player === myPlayerIndex) {
+            portalPlacementInProgress = true;
+        } else {
+            portalPlacementInProgress = false;
+        }
         
         updateLightParticles();
         
@@ -201,6 +210,15 @@ function initGame(gameId, playerId) {
             game_id: gameId,
             player_id: playerId
         });
+    });
+
+    document.getElementById('cancelPortalBtn').addEventListener('click', () => {
+        socket.emit('cancel_portal', {
+            game_id: gameId,
+            player_id: playerId
+        });
+        selectedPiece = null;
+        portalPlacementInProgress = false;
     });
     
     document.getElementById('togglePickupMode').addEventListener('click', togglePickupMode);
@@ -497,12 +515,13 @@ function updateUI() {
         
         const inventoryDiv = document.getElementById('inventory');
         inventoryDiv.innerHTML = '';
-        
+
         const pieces = [
             { type: 'mirror', icon: '🪞', label: 'Mirror', cost: gameState.piece_costs.mirror },
             { type: 'splitter', icon: '✂️', label: 'Splitter', cost: gameState.piece_costs.splitter },
             { type: 'prism', icon: '◆', label: 'Prism', cost: gameState.piece_costs.prism },
-            { type: 'blocker', icon: '⬛', label: 'Blocker', cost: gameState.piece_costs.blocker }
+            { type: 'blocker', icon: '⬛', label: 'Blocker', cost: gameState.piece_costs.blocker },
+            { type: 'portal', icon: '🌀', label: 'Portal Pair', cost: gameState.piece_costs.portal }
         ];
         
         inventoryDiv.className = 'inventory-grid';
@@ -545,9 +564,18 @@ function updateUI() {
     }
     
     updateSelectedPieceInfo();
-    
+
     const passTurnBtn = document.getElementById('passTurnBtn');
-    passTurnBtn.disabled = gameState.current_player !== myPlayerIndex;
+    const cancelPortalBtn = document.getElementById('cancelPortalBtn');
+    
+    if (portalPlacementInProgress) {
+        passTurnBtn.style.display = 'none';
+        cancelPortalBtn.style.display = 'block';
+    } else {
+        passTurnBtn.style.display = 'block';
+        cancelPortalBtn.style.display = 'none';
+        passTurnBtn.disabled = gameState.current_player !== myPlayerIndex;
+    }    
 }
 
 function updateObjectivesDisplay() {
@@ -651,14 +679,16 @@ function updateSelectedPieceInfo() {
             'mirror': 'Reflects light at 90°. Rotate to change direction. Placing ends your turn.',
             'prism': 'Splits into 3 beams. Creates powerful area coverage. Only 1 per player! Placing ends your turn.',
             'blocker': 'Completely stops light. Cannot be placed within 3 cells of light sources. Placing ends your turn.',
-            'splitter': 'Splits into 2 perpendicular beams. More focused than prisms. Placing ends your turn.'
+            'splitter': 'Splits into 2 perpendicular beams. More focused than prisms. Placing ends your turn.',
+            'portal': 'Place on border edges. Light entering one portal exits the other. Direction based on exit wall. Place both portals in one turn (2nd placement ends turn).'
         };
         
         const labels = {
             'mirror': 'Mirror 🪞',
             'prism': 'Prism ◆',
             'blocker': 'Blocker ⬛',
-            'splitter': 'Splitter ✂️'
+            'splitter': 'Splitter ✂️',
+            'portal': 'Portal Pair 🌀'
         };
         
         selectedPieceName.textContent = labels[selectedPiece];
@@ -698,6 +728,15 @@ function handleCanvasClick(e) {
         if (pickupMode) {
             pickupPiece(gridX, gridY);
         } else if (selectedPiece) {
+            // Check if placing on border for portals
+            if (selectedPiece === 'portal') {
+                const isBorder = (gridX === 0 || gridX === gameState.board_size - 1 || 
+                                 gridY === 0 || gridY === gameState.board_size - 1);
+                if (!isBorder) {
+                    showNotification('Portals must be placed on border edges', 'error');
+                    return;
+                }
+            }
             placePiece(gridX, gridY);
         }
     }
@@ -1150,6 +1189,31 @@ function drawPiece(x, y, piece, isLastPlaced = false) {
         ctx.beginPath();
         ctx.arc(0, 0, size * 0.15, 0, Math.PI * 2);
         ctx.fill();
+    } else if (piece.type === 'portal') {
+        // Draw swirling portal effect
+        const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size / 2);
+        gradient.addColorStop(0, piece.color + 'FF');
+        gradient.addColorStop(0.5, piece.color + '88');
+        gradient.addColorStop(1, piece.color + '22');
+        
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw portal ring
+        ctx.strokeStyle = piece.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, size / 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw inner swirl
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, size / 4, 0, Math.PI * 1.5);
+        ctx.stroke();
     }
     
     ctx.restore();
@@ -1229,6 +1293,17 @@ function drawHoverPreview(x, y) {
         ctx.moveTo(-size / 2, size / 2);
         ctx.lineTo(size / 2, -size / 2);
         ctx.stroke();
+    } else if (selectedPiece === 'portal') {
+        // Draw portal preview
+        ctx.beginPath();
+        ctx.arc(0, 0, size / 2, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = gameState.players[myPlayerIndex].color;
+        ctx.fillText('🌀', 0, 0);
     }
     
     ctx.restore();

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prism Wars v4.7</title>
+    <title>Prism Wars v4.8</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/game.css') }}">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
@@ -64,6 +64,7 @@
                 <div class="actions-panel">
                     <button id="togglePickupMode" class="btn-action">🔄 Pickup Mode: OFF</button>
                     <button id="passTurnBtn" class="btn-action">⏭️ Pass Turn</button>
+                    <button id="cancelPortalBtn" class="btn-action" style="display: none;">❌ Cancel Portal</button>
                 </div>
 
                 <!-- Inventory Panel -->
@@ -127,6 +128,10 @@
                     <div class="legend-item">
                         <span class="legend-icon">🔄</span>
                         <span>Pickup (⚡1)</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-icon">🌀</span>
+                        <span>Portal Pair (⚡6)</span>
                     </div>
                     <div class="legend-item">
                         <span class="legend-icon">🌟</span>

@@ -471,6 +471,30 @@ def handle_pass_turn(data):
             'final_scores': game.get_scores()
         }, room=game_id)
 
+@socketio.on('cancel_portal')
+def handle_cancel_portal(data):
+    game_id = data['game_id'].upper()
+    player_id = data['player_id']
+    
+    if game_id not in lobby_manager.games:
+        emit('error', {'message': 'Game not found'})
+        return
+    
+    game = lobby_manager.games[game_id]
+    
+    current_player_idx = game.current_player
+    if game.players[current_player_idx]['id'] != player_id:
+        emit('error', {'message': 'Not your turn'})
+        return
+    
+    success, message = game.cancel_portal_placement(current_player_idx)
+    
+    if success:
+        save_game_state(game_id)
+        emit('game_state_update', game.get_state(), room=game_id)
+    else:
+        emit('error', {'message': message})
+
 def save_game_state(game_id):
     """Save game state to JSON file"""
     game = lobby_manager.games[game_id]

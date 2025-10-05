@@ -16,14 +16,14 @@ class PrismWarsGame:
         self.round_number = 1
         self.max_rounds = 15
         self.winner = None
-        
+
         self.pieces_per_player = {
             'mirror': 8,
             'prism': 1,
             'blocker': 4,
             'splitter': 3,
-            'portal': 1
-        }
+            'portal': 1  # 1 pair per player
+        }        
         
         self.player_inventory = []
         self.amplifier_tiles = []
@@ -33,7 +33,6 @@ class PrismWarsGame:
         self.objectives = []
         self.completed_objectives = []
         self.last_piece_placement = None  # Track last placed piece (x, y, player_idx)
-        self.last_piece_placement = None
         self.portal_pairs = {}
         self.portal_placement_in_progress = None
         
@@ -48,7 +47,7 @@ class PrismWarsGame:
             'portal': 6
         }
         self.pickup_cost = 1
-
+        
         # Portal tracking
         self.portal_pairs = {}  # {player_idx: {'portal_a': (x, y), 'portal_b': (x, y)}}
         self.portal_placement_in_progress = None  # {'player': idx, 'first_portal': (x, y)}
@@ -70,7 +69,7 @@ class PrismWarsGame:
     def initialize_board(self):
         """Initialize the game board and light sources"""
         self.board = [[None for _ in range(self.board_size)] for _ in range(self.board_size)]
-        
+
         self.player_inventory = []
         for _ in self.players:
             self.player_inventory.append({
@@ -79,11 +78,11 @@ class PrismWarsGame:
                 'blocker': self.pieces_per_player['blocker'],
                 'splitter': self.pieces_per_player['splitter'],
                 'portal': self.pieces_per_player['portal']
-            })
-        
+            })        
+
         self.portal_pairs = {}
         self.portal_placement_in_progress = None
-
+        
         self.player_energy = [4 for _ in self.players]
         
         self._initialize_light_sources()
@@ -347,6 +346,10 @@ class PrismWarsGame:
         if piece['type'] == 'portal':
             return False, "Cannot pick up portals - they are permanent once placed"
         
+        piece = self.board[y][x]
+        if piece is None:
+            return False, "No piece to pick up"
+        
         if piece['player'] != player_idx:
             return False, "Can only pick up your own pieces"
         
@@ -361,7 +364,7 @@ class PrismWarsGame:
         self.spend_energy(player_idx, self.pickup_cost)
         
         return True, "Piece picked up"
-
+    
     def place_piece(self, x, y, piece_type, rotation=0):
         """Place a piece on the board - portals require two placements, others end turn immediately"""
         if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
@@ -514,7 +517,7 @@ class PrismWarsGame:
         self.portal_placement_in_progress = None
         
         return True, "Portal placement cancelled"
-    
+
     def next_turn(self):
         """Move to the next player's turn"""
         # Store the starting player to detect when we complete a full round
@@ -643,7 +646,7 @@ class PrismWarsGame:
                     'player': player
                 })
                 segment_start = None
-
+            
             piece_type = piece['type']
             
             if piece_type == 'blocker':
@@ -816,7 +819,7 @@ class PrismWarsGame:
                     # No pair, portal doesn't work
                     break
             
-            elif piece_type == 'mirror':
+            elif piece_type == 'mirror':            
                 rotation = piece['rotation']
                 direction = self._reflect_direction(direction, rotation)
                 dx, dy = self._get_direction_delta(direction)
@@ -1085,7 +1088,7 @@ class PrismWarsGame:
                 else:
                     break
             
-            elif piece_type == 'mirror':
+            elif piece_type == 'mirror':            
                 rotation = piece['rotation']
                 direction = self._reflect_direction(direction, rotation)
                 dx, dy = self._get_direction_delta(direction)
@@ -1402,8 +1405,7 @@ class PrismWarsGame:
             'disconnected_players': list(self.disconnected_players),
             'last_heartbeat': self.last_heartbeat,
             'last_piece_placement': self.last_piece_placement,
-            'portal_pairs': self.portal_pairs,
-            'portal_placement_in_progress': self.portal_placement_in_progress,
+
             'pending_disconnects': self.pending_disconnects,
             'created_at': self.created_at.isoformat() if hasattr(self, 'created_at') else None,
             'started_at': self.started_at.isoformat() if hasattr(self, 'started_at') else None
@@ -1436,8 +1438,6 @@ class PrismWarsGame:
         game.last_heartbeat = data.get('last_heartbeat', {})
         game.pending_disconnects = data.get('pending_disconnects', {})
         game.last_piece_placement = data.get('last_piece_placement')
-        game.portal_pairs = data.get('portal_pairs', {})
-        game.portal_placement_in_progress = data.get('portal_placement_in_progress')
         
         if data.get('created_at'):
             game.created_at = datetime.fromisoformat(data['created_at'])
@@ -1457,8 +1457,6 @@ class PrismWarsGame:
             'board': self.board,
             'board_size': self.board_size,
             'last_piece_placement': self.last_piece_placement,
-            'portal_pairs': self.portal_pairs,
-            'portal_placement_in_progress': self.portal_placement_in_progress,
             'light_sources': self.light_sources,
             'current_player': self.current_player,
             'round_number': self.round_number,
