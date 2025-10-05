@@ -199,17 +199,17 @@ class PrismWarsGame:
                 py = entry_y + dy * dist
                 if 0 <= px < self.board_size and 0 <= py < self.board_size:
                     self.blocker_exclusion_zones.append((px, py))
-    
+
     def _assign_objectives(self):
         """Assign objectives to each player"""
         all_objectives = [
             {'id': 'corners', 'name': 'Control All 4 Corners', 'points': 15, 'description': 'Control all 4 corner cells'},
             {'id': 'center', 'name': 'Dominate Center', 'points': 12, 'description': 'Control the center 2x2 area'},
-            {'id': 'edge_control', 'name': 'Edge Master', 'points': 10, 'description': 'Control 8+ edge cells'},
+            {'id': 'border_dominance', 'name': 'Border Dominance', 'points': 12, 'description': 'Control 15+ edge cells'},
             {'id': 'amplifier_control', 'name': 'Power Surge', 'points': 12, 'description': 'Control 3+ amplifier tiles'},
-            {'id': 'territory_spread', 'name': 'Expansionist', 'points': 10, 'description': 'Control territory in all 4 quadrants'},
+            {'id': 'expansionist', 'name': 'Expansionist', 'points': 12, 'description': 'Control 5+ cells in each quadrant'},
         ]
-        
+    
         self.objectives = []
         for _ in self.players:
             player_objectives = random.sample(all_objectives, 2)
@@ -731,19 +731,32 @@ class PrismWarsGame:
             })
         
         return detailed_scores
-    
+
     def _calculate_combos(self, territory):
-        """Calculate combo bonuses - FIXED mirror chain detection"""
+        """Calculate combo bonuses - mirror chains and longest beam"""
         combo_scores = []
+        
+        # First, find the longest beam across all players
+        longest_beam_player = None
+        longest_beam_length = 0
         
         for player_idx in range(len(self.players)):
             if player_idx in self.disconnected_players:
-                combo_scores.append({'perfect_reflection': 0, 'prism_cascade': 0, 'total': 0, 'details': []})
+                continue
+            
+            player_longest = self._find_longest_beam(player_idx)
+            if player_longest > longest_beam_length:
+                longest_beam_length = player_longest
+                longest_beam_player = player_idx
+        
+        for player_idx in range(len(self.players)):
+            if player_idx in self.disconnected_players:
+                combo_scores.append({'perfect_reflection': 0, 'longest_beam': 0, 'total': 0, 'details': []})
                 continue
             
             combos = {
                 'perfect_reflection': 0,
-                'prism_cascade': 0,
+                'longest_beam': 0,
                 'total': 0,
                 'details': []
             }
@@ -756,15 +769,99 @@ class PrismWarsGame:
                     combos['perfect_reflection'] += bonus
                     combos['details'].append(f"Mirror Chain x{chain_length}: +{bonus}")
             
-            prism_bonus = self._calculate_prism_cascade(player_idx, territory)
-            combos['prism_cascade'] = prism_bonus
-            if prism_bonus > 0:
-                combos['details'].append(f"Prism Cascade: +{prism_bonus}")
+            # Award longest beam bonus
+            if player_idx == longest_beam_player and longest_beam_length >= 8:
+                combos['longest_beam'] = 10
+                combos['details'].append(f"Longest Beam ({longest_beam_length} cells): +10")
             
-            combos['total'] = combos['perfect_reflection'] + combos['prism_cascade']
+            combos['total'] = combos['perfect_reflection'] + combos['longest_beam']
             combo_scores.append(combos)
         
         return combo_scores
+
+    def _find_longest_beam(self, player_idx):
+        """Find the longest uninterrupted beam path for a player"""
+        max_length = 0
+        
+        # Get player's light sources
+        player_sources = [s for s in self.light_sources if s['player'] == player_idx]
+        
+        for source in player_sources:
+            beam_length = self._trace_beam_length(source)
+            if beam_length > max_length:
+                max_length = beam_length
+        
+        return max_length
+    
+    def _trace_beam_length(self, source, visited=None):
+        """Trace a beam and return its length in cells"""
+        if visited is None:
+            visited = set()
+        
+        x, y = source['x'], source['y']
+        direction = source['direction']
+        
+        dx, dy = self._get_direction_delta(direction)
+        x += dx
+        y += dy
+        
+        length = 0
+        max_iterations = self.board_size * 3
+        iterations = 0
+        
+        while iterations < max_iterations:
+            iterations += 1
+            
+            if x < 0 or x >= self.board_size or y < 0 or y >= self.board_size:
+                break
+            
+            if (x, y) in visited:
+                break
+            
+            visited.add((x, y))
+            length += 1
+            
+            piece = self.board[y][x]
+            
+            if piece is None:
+                x += dx
+                y += dy
+                continue
+            
+            if piece['type'] == 'blocker':
+                break
+            
+            elif piece['type'] == 'mirror':
+                rotation = piece['rotation']
+                direction = self._reflect_direction(direction, rotation)
+                dx, dy = self._get_direction_delta(direction)
+                x += dx
+                y += dy
+            
+            elif piece['type'] in ['prism', 'splitter']:
+                # For split beams, trace each branch and take the longest
+                if piece['type'] == 'prism':
+                    rotation = piece['rotation']
+                    new_directions = self._prism_split(direction, rotation)
+                else:
+                    new_directions = self._splitter_split(direction)
+                
+                max_branch_length = 0
+                for new_dir in new_directions:
+                    new_source = {
+                        'x': x,
+                        'y': y,
+                        'direction': new_dir,
+                        'player': source['player'],
+                        'color': source['color']
+                    }
+                    branch_length = self._trace_beam_length(new_source, visited.copy())
+                    if branch_length > max_branch_length:
+                        max_branch_length = branch_length
+                
+                return length + max_branch_length
+        
+        return length
     
     def _find_mirror_chains_in_light_paths(self, player_idx):
         """Find chains of mirrors along actual light beam paths"""
@@ -907,8 +1004,8 @@ class PrismWarsGame:
                     # 16x16 board, perfect center is cells (7,7), (8,7), (7,8), (8,8)
                     center_cells = [(7, 7), (8, 7), (7, 8), (8, 8)]
                     completed = all(player_idx in territory[y][x] and len(territory[y][x]) == 1 for x, y in center_cells)
-                
-                elif obj_id == 'edge_control':
+
+                elif obj_id == 'border_dominance':
                     edge_count = 0
                     for x in range(self.board_size):
                         if player_idx in territory[0][x] and len(territory[0][x]) == 1:
@@ -920,28 +1017,30 @@ class PrismWarsGame:
                             edge_count += 1
                         if player_idx in territory[y][self.board_size-1] and len(territory[y][self.board_size-1]) == 1:
                             edge_count += 1
-                    completed = edge_count >= 8
-                
+                    completed = edge_count >= 15
+
                 elif obj_id == 'amplifier_control':
                     amp_count = sum(1 for x, y in self.amplifier_tiles 
                                    if player_idx in territory[y][x] and len(territory[y][x]) == 1)
                     completed = amp_count >= 3
-                
-                elif obj_id == 'territory_spread':
-                    quadrants = [False, False, False, False]
+
+                elif obj_id == 'expansionist':
+                    # Count cells in each quadrant
+                    quadrant_counts = [0, 0, 0, 0]
                     for y in range(self.board_size):
                         for x in range(self.board_size):
                             if player_idx in territory[y][x] and len(territory[y][x]) == 1:
                                 if x < 8 and y < 8:
-                                    quadrants[0] = True
+                                    quadrant_counts[0] += 1
                                 elif x >= 8 and y < 8:
-                                    quadrants[1] = True
+                                    quadrant_counts[1] += 1
                                 elif x < 8 and y >= 8:
-                                    quadrants[2] = True
+                                    quadrant_counts[2] += 1
                                 else:
-                                    quadrants[3] = True
-                    completed = all(quadrants)
-                
+                                    quadrant_counts[3] += 1
+                    # Need 5+ cells in each quadrant
+                    completed = all(count >= 5 for count in quadrant_counts)
+
                 if completed:
                     score['completed'].append(objective)
                     score['total'] += objective['points']

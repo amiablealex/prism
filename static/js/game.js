@@ -599,21 +599,21 @@ function updateCombosDisplay() {
     `;
     combosDiv.appendChild(mirrorCombo);
     
-    // Prism Cascade - show potential or actual
-    const prismCombo = document.createElement('div');
-    prismCombo.className = 'combo-item' + (combos.prism_cascade > 0 ? ' active' : '');
-    const prismPoints = combos.prism_cascade > 0 ? `+${combos.prism_cascade}` : '+3';
-    const prismClass = combos.prism_cascade > 0 ? '' : ' potential';
+    // Longest Beam - show potential or actual
+    const beamCombo = document.createElement('div');
+    beamCombo.className = 'combo-item' + (combos.longest_beam > 0 ? ' active' : '');
+    const beamPoints = combos.longest_beam > 0 ? `+${combos.longest_beam}` : '+10';
+    const beamClass = combos.longest_beam > 0 ? '' : ' potential';
     
-    prismCombo.innerHTML = `
+    beamCombo.innerHTML = `
         <div class="combo-header">
-            <span class="combo-icon">${combos.prism_cascade > 0 ? '✓' : '○'}</span>
-            <span class="combo-name">Prism Cascade</span>
-            <span class="combo-points${prismClass}">${prismPoints}</span>
+            <span class="combo-icon">${combos.longest_beam > 0 ? '✓' : '○'}</span>
+            <span class="combo-name">Longest Beam</span>
+            <span class="combo-points${beamClass}">${beamPoints}</span>
         </div>
-        <div class="combo-description">Prism/splitter controlling 10+ nearby cells</div>
+        <div class="combo-description">Have the longest beam on the board (8+ cells)</div>
     `;
-    combosDiv.appendChild(prismCombo);
+    combosDiv.appendChild(beamCombo);
     
     // Details if any combos active
     if (combos.details && combos.details.length > 0) {
